@@ -38,7 +38,8 @@ type Config struct {
 	CognitoUserPoolID      string `env:"COGNITO_USER_POOL_ID" required:"true"`
 	CognitoAppClientID     string `env:"COGNITO_APP_CLIENT_ID" required:"true"`
 	CognitoAppClientSecret string `env:"COGNITO_APP_CLIENT_SECRET" required:"true"`
-	Environment            string
+	MongoURI               string `env:"MONGO_URI" required:"true"` // TODO: set up a database properly before production deployment
+	Environment            string `env:"ENVIRONMENT" envDefault:"development"`
 	Debug                  bool
 }
 
