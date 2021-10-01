@@ -9,19 +9,18 @@ type User struct {
 	Email     string    `bson:"email" json:"email"`
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 	Active    bool      `bson:"active" json:"active"`
+	Phone     string    `bson:"phone" json:"phone"`
 }
 
 type LoginRequest struct {
-	Email    string
+	UserName string
 	Password string
 }
 
 type AuthResponse struct {
-	ID           string
-	Email        string
-	AccessToken  string
-	RefreshToken string
-	ExpiresAt    time.Time
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
+	ExpiresAt    time.Time `json:"expires_at"`
 }
 
 type RegistrationRequest struct {
@@ -32,12 +31,16 @@ type RegistrationRequest struct {
 }
 
 type SignupResponse struct {
-	IsConfirmed    bool
-	DeliveryMedium string
-	Destination    string
+	IsConfirmed    bool   `json:"is_confirmed"`
+	DeliveryMedium string `json:"delivery_medium"`
+	Destination    string `json:"destination"`
 }
 
 type VerificationRequest struct {
-	Email string
-	Code  string
+	UserName string `json:"user_name"`
+	Code     string `json:"code"`
+}
+
+type ResendConfirmationCodeRequest struct {
+	UserName string
 }

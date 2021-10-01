@@ -9,6 +9,7 @@ import (
 	"github.com/lucsky/cuid"
 	"github.com/pkg/errors"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -16,6 +17,7 @@ func (a *API) AuthRoutes(router *chi.Mux) http.Handler {
 	router.Method("POST", "/login", Handler(a.login))
 	router.Method("POST", "/signup", Handler(a.signUp))
 	router.Method("POST", "/confirm_signup", Handler(a.confirmSignUp))
+	router.Method("POST", "/resend_code", Handler(a.resendCode))
 
 	return router
 }
@@ -27,8 +29,8 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	if err := decodeJSONBody(&tracingContext, r.Body, &login); err != nil {
 		return RespondWithError(err, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
 	}
-	if login.Email == "" {
-		return RespondWithError(nil, "Email is a required field", http.StatusBadRequest, &tracingContext)
+	if login.UserName == "" {
+		return RespondWithError(nil, "User name is a required field", http.StatusBadRequest, &tracingContext)
 	}
 
 	if login.Password == "" {
@@ -58,7 +60,14 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) *ServerResponse {
 		}
 	}
 
-	return &ServerResponse{Payload: authResponse}
+	user, err := a.Deps.DAL.UserDAL.FindByEmail(login.UserName)
+
+	response := map[string]interface{}{
+		"user":      user,
+		"auth_info": authResponse,
+	}
+
+	return &ServerResponse{Payload: response}
 }
 
 func (a *API) signUp(w http.ResponseWriter, r *http.Request) *ServerResponse {
@@ -74,7 +83,7 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	}
 
 	if registration.FullName == "" {
-		return RespondWithError(nil, "first name is a required field", http.StatusBadRequest, &tracingContext)
+		return RespondWithError(nil, "full name is a required field", http.StatusBadRequest, &tracingContext)
 	}
 
 	if registration.Phone == "" {
@@ -113,6 +122,8 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) *ServerResponse {
 		Email:     registration.Email,
 		CreatedAt: time.Now(),
 		Active:    true,
+		Phone:     registration.Phone,
+		UserName:  strings.Split(registration.FullName, " ")[1],
 	}
 
 	err = a.Deps.DAL.UserDAL.Add(user)
@@ -131,8 +142,8 @@ func (a *API) confirmSignUp(w http.ResponseWriter, r *http.Request) *ServerRespo
 		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
 	}
 
-	if verification.Email == "" {
-		return RespondWithError(nil, "Email is a required field", http.StatusBadRequest, &tracingContext)
+	if verification.UserName == "" {
+		return RespondWithError(nil, "User name is a required field", http.StatusBadRequest, &tracingContext)
 	}
 
 	if verification.Code == "" {
@@ -159,5 +170,31 @@ func (a *API) confirmSignUp(w http.ResponseWriter, r *http.Request) *ServerRespo
 		"confirmed": status,
 	}
 
+	return &ServerResponse{Payload: response}
+}
+
+func (a *API) resendCode(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	var resendCode model.ResendConfirmationCodeRequest
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	if err := decodeJSONBody(&tracingContext, r.Body, &resendCode); err != nil {
+		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+	}
+
+	if resendCode.UserName == "" {
+		return RespondWithError(nil, "email is required", http.StatusBadRequest, &tracingContext)
+	}
+	status, err := a.Deps.AWS.Cognito.ResendConfirmationCode(&resendCode)
+	if err != nil {
+		var ae smithy.APIError
+		if errors.As(err, &ae) {
+			switch ae.ErrorCode() {
+			default:
+				return RespondWithError(err, "Failed to complete resend code request", http.StatusInternalServerError, &tracingContext)
+			}
+		}
+	}
+	response := map[string]interface{}{
+		"delivered": status,
+	}
 	return &ServerResponse{Payload: response}
 }

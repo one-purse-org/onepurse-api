@@ -120,6 +120,7 @@ func decodeJSONBody(ctx *tracing.Context, body io.ReadCloser, target interface{}
 	}
 
 	if err := json.NewDecoder(body).Decode(&target); err != nil {
+		logrus.Infof("error parsing json body for request: %v : %v", ctx, err)
 		return errors.Wrapf(err, "error parsing json body for request: %v", ctx)
 	}
 

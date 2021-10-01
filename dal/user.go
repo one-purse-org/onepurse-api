@@ -2,9 +2,9 @@ package dal
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -15,6 +15,7 @@ type IUserDAL interface {
 	FindByID(userID string) (*model.User, error)
 	FindAll() (*[]model.User, error)
 	FindByUsername(username string) (*model.User, error)
+	FindByEmail(email string) (*model.User, error)
 	UpdateUser(userID string, updateParam bson.D) error
 	DeleteUser(userID string) error
 }
@@ -82,12 +83,30 @@ func (u UserDAL) FindAll() (*[]model.User, error) {
 func (u UserDAL) FindByUsername(username string) (*model.User, error) {
 	var user *model.User
 
-	err := u.Collection.FindOne(context.TODO(), bson.D{{"user_name", username}}).Decode(&user)
+	err := u.Collection.FindOne(context.TODO(),
+		bson.D{{"$or", []interface{}{bson.D{{"user_name", username}},
+			bson.D{{"email", username}},
+			bson.D{{"phone", username}}}}}).Decode(&user)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			findErr := fmt.Sprintf("user %s record does not exist", username)
 			return nil, errors.New(findErr)
+		} else {
+			return nil, err
+		}
+	}
+	return user, nil
+}
+
+func (u UserDAL) FindByEmail(email string) (*model.User, error) {
+	var user *model.User
+
+	err := u.Collection.FindOne(context.TODO(), bson.D{{"email", email}}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			findErr := fmt.Sprintf("user %s record does not exist", email)
+			return nil, errors.Wrapf(err, findErr)
 		} else {
 			return nil, err
 		}

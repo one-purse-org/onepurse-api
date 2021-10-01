@@ -11,9 +11,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/isongjosiah/work/onepurse-api/config"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
-	"github.com/lucsky/cuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"strings"
 	"time"
 )
 
@@ -21,6 +21,7 @@ type ICognitoService interface {
 	Login(l *model.LoginRequest) (*model.AuthResponse, error)
 	SignUp(r *model.RegistrationRequest) (*model.SignupResponse, error)
 	ConfirmSignUp(v *model.VerificationRequest) (bool, error)
+	ResendConfirmationCode(r *model.ResendConfirmationCodeRequest) (bool, error)
 }
 
 type CognitoService struct {
@@ -54,9 +55,9 @@ func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error
 	params := &cognito.InitiateAuthInput{
 		AuthFlow: "USER_PASSWORD_AUTH",
 		AuthParameters: map[string]string{
-			"USERNAME":    l.Email,
+			"USERNAME":    l.UserName,
 			"PASSWORD":    l.Password,
-			"SECRET_HASH": c.generateCognitoSecretHash(l.Email),
+			"SECRET_HASH": c.generateCognitoSecretHash(l.UserName),
 		},
 		ClientId: aws.String(c.config.CognitoAppClientID),
 	}
@@ -68,7 +69,6 @@ func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error
 	}
 
 	authResponse := &model.AuthResponse{
-		ID:           cuid.New(),
 		AccessToken:  *cognitoResponse.AuthenticationResult.AccessToken,
 		RefreshToken: *cognitoResponse.AuthenticationResult.RefreshToken,
 		ExpiresAt:    now.Add(time.Second * time.Duration(cognitoResponse.AuthenticationResult.ExpiresIn)),
@@ -78,19 +78,24 @@ func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error
 }
 
 func (c CognitoService) SignUp(r *model.RegistrationRequest) (*model.SignupResponse, error) {
+	temp := strings.Split(r.FullName, " ")
 	params := &cognito.SignUpInput{
 		ClientId:   aws.String(c.config.CognitoAppClientID),
+		Username:   aws.String(temp[1]),
 		Password:   aws.String(r.Password),
-		Username:   aws.String(r.Email),
-		SecretHash: aws.String(c.generateCognitoSecretHash(r.Email)),
+		SecretHash: aws.String(c.generateCognitoSecretHash(temp[1])),
 		UserAttributes: []types.AttributeType{
 			{
-				Name:  aws.String("phone"),
+				Name:  aws.String("phone_number"),
 				Value: aws.String(r.Phone),
 			},
 			{
 				Name:  aws.String("name"),
 				Value: aws.String(r.FullName),
+			},
+			{
+				Name:  aws.String("email"),
+				Value: aws.String(r.Email),
 			},
 		},
 	}
@@ -110,13 +115,27 @@ func (c CognitoService) SignUp(r *model.RegistrationRequest) (*model.SignupRespo
 
 func (c CognitoService) ConfirmSignUp(v *model.VerificationRequest) (bool, error) {
 	params := &cognito.ConfirmSignUpInput{
-		Username:         aws.String(v.Email),
+		Username:         aws.String(v.UserName),
 		ConfirmationCode: aws.String(v.Code),
 		ClientId:         aws.String(c.config.CognitoAppClientID),
-		SecretHash:       aws.String(c.generateCognitoSecretHash(v.Email)),
+		SecretHash:       aws.String(c.generateCognitoSecretHash(v.UserName)),
 	}
 
 	_, err := c.cognitoClient.ConfirmSignUp(context.TODO(), params)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func (c CognitoService) ResendConfirmationCode(r *model.ResendConfirmationCodeRequest) (bool, error) {
+	params := &cognito.ResendConfirmationCodeInput{
+		ClientId:   aws.String(c.config.CognitoAppClientID),
+		Username:   aws.String(r.UserName),
+		SecretHash: aws.String(c.generateCognitoSecretHash(r.UserName)),
+	}
+	_, err := c.cognitoClient.ResendConfirmationCode(context.TODO(), params)
 	if err != nil {
 		return false, err
 	}
