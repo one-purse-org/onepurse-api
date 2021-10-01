@@ -45,8 +45,9 @@ func (a *API) SetupServerHandler() http.Handler {
 	}))
 	mux.Use(RequestTracing)
 	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("welcome"))
+		_, _ = w.Write([]byte("welcome"))
 	})
+	mux.Mount("/auth", a.AuthRoutes(mux))
 
 	return mux
 }
