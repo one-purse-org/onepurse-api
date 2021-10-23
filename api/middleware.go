@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-go/jwx/jwt"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"strings"
 )
 
 const ContextKeyRequestSource = common.ContextKey("header-request-source")
@@ -41,7 +42,7 @@ func RequestTracing(next http.Handler) http.Handler {
 }
 
 func Authorization(next http.Handler) http.Handler {
-	cfg := config.New() //TODO: Find a way to skip this, makes no sense doing this twice
+	cfg := config.New() //TODO: Find a way to skip this, makes no sense doing this twice, and probably expand on this middleware
 
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		url := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json", cfg.AWSRegion, cfg.CognitoUserPoolID)
@@ -52,12 +53,12 @@ func Authorization(next http.Handler) http.Handler {
 			return
 		}
 
-		awsJwt := r.Header.Get("Authorization")
+		awsJwt := strings.Split(r.Header.Get("Authorization"), " ")[1]
 		if awsJwt == "" {
 			writeErrorResponse(w, http.StatusUnauthorized, "Not authorized")
 			return
 		}
-		token, err := jwt.ParseString(
+		_, err = jwt.ParseString(
 			awsJwt,
 			jwt.WithKeySet(keyset),
 			jwt.WithValidate(true),
@@ -67,8 +68,7 @@ func Authorization(next http.Handler) http.Handler {
 			writeErrorResponse(w, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
-		fmt.Println(token)
-
+		next.ServeHTTP(w, r)
 	}
 
 	return http.HandlerFunc(fn)

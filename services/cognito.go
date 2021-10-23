@@ -21,6 +21,9 @@ type ICognitoService interface {
 	Login(l *model.LoginRequest) (*model.AuthResponse, error)
 	SignUp(r *model.RegistrationRequest) (*model.SignupResponse, error)
 	ConfirmSignUp(v *model.VerificationRequest) (bool, error)
+	ForgetPassword(email string) (*cognito.ForgotPasswordOutput, error)
+	ConfirmForgotPassword(p *model.ConfirmForgotPasswordRequest) (bool, error)
+	ChangePassword(p *model.ChangePassword) (bool, error)
 }
 
 type CognitoService struct {
@@ -121,5 +124,46 @@ func (c CognitoService) ConfirmSignUp(v *model.VerificationRequest) (bool, error
 		return false, err
 	}
 
+	return true, nil
+}
+
+func (c CognitoService) ForgetPassword(email string) (*cognito.ForgotPasswordOutput, error) {
+	params := &cognito.ForgotPasswordInput{
+		ClientId:   aws.String(c.generateCognitoSecretHash(email)),
+		Username:   aws.String(email),
+		SecretHash: aws.String(c.generateCognitoSecretHash(email)),
+	}
+	resp, err := c.cognitoClient.ForgotPassword(context.TODO(), params)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c CognitoService) ConfirmForgotPassword(p *model.ConfirmForgotPasswordRequest) (bool, error) {
+	params := &cognito.ConfirmForgotPasswordInput{
+		ClientId:         aws.String(c.generateCognitoSecretHash(p.Username)),
+		ConfirmationCode: aws.String(p.Code),
+		Password:         aws.String(p.ProposedPassword),
+		Username:         aws.String(p.Username),
+		SecretHash:       aws.String(c.generateCognitoSecretHash(p.Username)),
+	}
+	_, err := c.cognitoClient.ConfirmForgotPassword(context.TODO(), params)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (c CognitoService) ChangePassword(p *model.ChangePassword) (bool, error) {
+	params := &cognito.ChangePasswordInput{
+		AccessToken:      aws.String(p.AccessToken),
+		PreviousPassword: aws.String(p.PreviousPassword),
+		ProposedPassword: aws.String(p.ProposedPassword),
+	}
+	_, err := c.cognitoClient.ChangePassword(context.TODO(), params)
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }

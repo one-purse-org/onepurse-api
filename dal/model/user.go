@@ -17,16 +17,16 @@ type User struct {
 }
 
 type LoginRequest struct {
-	Username string
-	Password string
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 type AuthResponse struct {
-	ID           string
-	Email        string
-	AccessToken  string
-	RefreshToken string
-	ExpiresAt    time.Time
+	ID           string    `json:"id"`
+	Email        string    `json:"email"`
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
+	ExpiresAt    time.Time `json:"expires_at"`
 }
 
 type RegistrationRequest struct {
@@ -37,12 +37,24 @@ type RegistrationRequest struct {
 }
 
 type SignupResponse struct {
-	IsConfirmed    bool
-	DeliveryMedium string
-	Destination    string
+	IsConfirmed    bool   `json:"is_confirmed"`
+	DeliveryMedium string `json:"delivery_medium"`
+	Destination    string `json:"destination"`
 }
 
 type VerificationRequest struct {
-	Email string
-	Code  string
+	Email string `json:"email"`
+	Code  string `json:"code"`
+}
+
+type ConfirmForgotPasswordRequest struct {
+	Username         string `json:"username"`
+	Code             string `json:"code"`
+	ProposedPassword string `json:"proposed_password"`
+}
+
+type ChangePassword struct {
+	AccessToken      string `json:"access_token"`
+	PreviousPassword string `json:"previous_password"`
+	ProposedPassword string `json:"proposed_password"`
 }
