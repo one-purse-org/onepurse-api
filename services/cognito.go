@@ -54,9 +54,9 @@ func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error
 	params := &cognito.InitiateAuthInput{
 		AuthFlow: "USER_PASSWORD_AUTH",
 		AuthParameters: map[string]string{
-			"USERNAME":    l.Email,
+			"USERNAME":    l.Username,
 			"PASSWORD":    l.Password,
-			"SECRET_HASH": c.generateCognitoSecretHash(l.Email),
+			"SECRET_HASH": c.generateCognitoSecretHash(l.Username),
 		},
 		ClientId: aws.String(c.config.CognitoAppClientID),
 	}

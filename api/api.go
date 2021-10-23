@@ -48,6 +48,7 @@ func (a *API) SetupServerHandler() http.Handler {
 		_, _ = w.Write([]byte("welcome"))
 	})
 	mux.Mount("/auth", a.AuthRoutes(mux))
+	mux.Mount("/user", a.UserRoutes())
 
 	return mux
 }

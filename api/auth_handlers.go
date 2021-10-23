@@ -27,8 +27,8 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	if err := decodeJSONBody(&tracingContext, r.Body, &login); err != nil {
 		return RespondWithError(err, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
 	}
-	if login.Email == "" {
-		return RespondWithError(nil, "Email is a required field", http.StatusBadRequest, &tracingContext)
+	if login.Username == "" {
+		return RespondWithError(nil, "Username is a required field", http.StatusBadRequest, &tracingContext)
 	}
 
 	if login.Password == "" {
@@ -108,11 +108,12 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	}
 
 	user := &model.User{
-		ID:        cuid.New(),
-		FullName:  registration.FullName,
-		Email:     registration.Email,
-		CreatedAt: time.Now(),
-		Active:    true,
+		ID:           cuid.New(),
+		FullName:     registration.FullName,
+		Email:        registration.Email,
+		CreatedAt:    time.Now(),
+		Active:       true,
+		IsIDVerified: false,
 	}
 
 	err = a.Deps.DAL.UserDAL.Add(user)

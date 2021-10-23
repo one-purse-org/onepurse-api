@@ -3,16 +3,21 @@ package model
 import "time"
 
 type User struct {
-	ID        string    `bson:"_id" json:"id"`
-	FullName  string    `bson:"full_name" json:"full_name"`
-	UserName  string    `bson:"user_name" json:"user_name"`
-	Email     string    `bson:"email" json:"email"`
-	CreatedAt time.Time `bson:"created_at" json:"created_at"`
-	Active    bool      `bson:"active" json:"active"`
+	ID                  string    `bson:"_id" json:"id"`
+	FullName            string    `bson:"full_name" json:"full_name"`
+	UserName            string    `bson:"user_name" json:"user_name"`
+	Email               string    `bson:"email" json:"email"`
+	TransactionPassword string    `bson:"transaction_password" json:"transaction_password"`
+	Avatar              string    `bson:"avatar" json:"avatar"`
+	IDType              string    `bson:"id_type" json:"id_type"`
+	IDImage             string    `bson:"id_image" json:"id_image"`
+	IsIDVerified        bool      `bson:"is_id_verified" json:"is_id_verified"`
+	CreatedAt           time.Time `bson:"created_at" json:"created_at"`
+	Active              bool      `bson:"active" json:"active"`
 }
 
 type LoginRequest struct {
-	Email    string
+	Username string
 	Password string
 }
 
