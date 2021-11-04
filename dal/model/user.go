@@ -8,6 +8,7 @@ type User struct {
 	UserName            string    `bson:"user_name" json:"user_name"`
 	Email               string    `bson:"email" json:"email"`
 	TransactionPassword string    `bson:"transaction_password" json:"transaction_password"`
+	PlaidAccessToken    string    `bson:"plaid_access_token" json:"plaid_access_token"`
 	Avatar              string    `bson:"avatar" json:"avatar"`
 	IDType              string    `bson:"id_type" json:"id_type"`
 	IDImage             string    `bson:"id_image" json:"id_image"`
