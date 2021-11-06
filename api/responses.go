@@ -18,12 +18,12 @@ const (
 
 // ServerResponse represents the structure of the response sent to the client
 type ServerResponse struct {
-	Err         error
-	Message     string
-	StatusCode  int
-	Context     context.Context
-	ContentType common.ContentType
-	Payload     interface{}
+	Err         error              `json:"err"`
+	Message     string             `json:"message"`
+	StatusCode  int                `json:"status_code"`
+	Context     context.Context    `json:"context"`
+	ContentType common.ContentType `json:"content_type"`
+	Payload     interface{}        `json:"payload"`
 }
 
 type ErrorResponse struct {
@@ -47,6 +47,9 @@ func WithContext(tracingContext *tracing.Context) *logrus.Entry {
 }
 
 func NewUserFacingError(message string, tracingContext *tracing.Context) error {
+	if tracingContext == nil {
+		return fmt.Errorf("%v", message)
+	}
 	return fmt.Errorf("%v, request-id: %v", message, tracingContext.RequestID)
 }
 
@@ -66,6 +69,24 @@ func RespondWithError(err error, message string, httpStatusCode int, tracingCont
 		Err:        NewUserFacingError(message, tracingContext),
 		StatusCode: httpStatusCode,
 		Message:    message,
+	}
+}
+
+func respondWithError(err error, message string, httpStatusCode int, tracingContext *tracing.Context) *ErrorResponse {
+	var wrappedErr error
+	if err != nil {
+		wrappedErr = errors.Wrap(err, message)
+	} else {
+		wrappedErr = errors.New(message)
+	}
+
+	WithContext(tracingContext).WithFields(logrus.Fields{
+		"err": wrappedErr,
+	}).Warn(message)
+
+	return &ErrorResponse{
+		ErrorMessage: NewUserFacingError(message, tracingContext).Error(),
+		ErrorCode:    httpStatusCode,
 	}
 }
 
@@ -106,7 +127,7 @@ func WriteJSONResponse(rw http.ResponseWriter, statusCode int, content []byte) {
 }
 
 func writeErrorResponse(w http.ResponseWriter, statusCode int, errString string) {
-	r := RespondWithError(nil, errString, http.StatusBadRequest, nil)
+	r := respondWithError(nil, errString, http.StatusBadRequest, nil)
 	errorResponse, _ := json.Marshal(r)
 	WriteJSONResponse(w, statusCode, errorResponse)
 }

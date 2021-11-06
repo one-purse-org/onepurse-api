@@ -10,7 +10,9 @@ import (
 
 type Dependencies struct {
 	// Services
-	AWS *services.AWS
+	AWS   *services.AWS
+	PLAID *services.PLAID
+
 	// DAL
 	DAL *userdal.DAL
 }
@@ -27,9 +29,15 @@ func New(cfg *config.Config) (*Dependencies, error) {
 		return nil, errors.Wrapf(err, "[AWS]: unable to set up AWS services")
 	}
 
+	plaid, err := services.NewPlaidService(cfg)
+	if err != nil {
+		return nil, errors.Wrapf(err, "[PLAID]: unable to set up PLAID service")
+	}
+
 	deps := &Dependencies{
-		AWS: aws,
-		DAL: dal,
+		AWS:   aws,
+		PLAID: plaid,
+		DAL:   dal,
 	}
 
 	return deps, nil

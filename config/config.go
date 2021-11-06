@@ -38,6 +38,13 @@ type Config struct {
 	CognitoUserPoolID      string `env:"COGNITO_USER_POOL_ID" required:"true"`
 	CognitoAppClientID     string `env:"COGNITO_APP_CLIENT_ID" required:"true"`
 	CognitoAppClientSecret string `env:"COGNITO_APP_CLIENT_SECRET" required:"true"`
+	PlaidClientId          string `env:"PLAID_CLIENT_ID" required:"true"`
+	PlaidClientName        string `env:"PLAID_CLIENT_NAME" required:"true"`
+	PlaidSecret            string `env:"PLAID_SECRET" required:"true"`
+	PlaidEnv               string `env:"PLAID_ENV" required:"true"`
+	PlaidProducts          string `env:"PLAID_PRODUCTS" required:"true"`
+	PlaidCountryCodes      string `env:"PLAID_COUNTRY_CODE" required:"true"`
+	PlaidRedirectUri       string `env:"PLAID_REDIRECT_URI" required:"true"`
 	MongoURI               string `env:"MONGO_URI" required:"true"` // TODO: set up a database properly before production deployment
 	Environment            string `env:"ENVIRONMENT" envDefault:"development"`
 	Debug                  bool
