@@ -19,6 +19,7 @@ func (a *API) AuthRoutes(router *chi.Mux) http.Handler {
 	router.Method("POST", "/reset_password", Handler(a.resetPassword))
 	router.Method("POST", "/confirm_password", Handler(a.confirmPassword))
 	router.Method("POST", "/change_password", Handler(a.changePassword))
+	router.Method("POST", "/resend_code", Handler(a.resendCode))
 
 	return router
 }
@@ -77,7 +78,7 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	}
 
 	if registration.FullName == "" {
-		return RespondWithError(nil, "first name is a required field", http.StatusBadRequest, &tracingContext)
+		return RespondWithError(nil, "full name is a required field", http.StatusBadRequest, &tracingContext)
 	}
 
 	if registration.Phone == "" {
@@ -164,6 +165,44 @@ func (a *API) confirmSignUp(w http.ResponseWriter, r *http.Request) *ServerRespo
 	}
 
 	return &ServerResponse{Payload: response}
+}
+
+func (a *API) resendCode(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	var email struct {
+		Email string `json:"email"`
+	}
+
+	if err := decodeJSONBody(&tracingContext, r.Body, &email); err != nil {
+		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+	}
+	if email.Email == "" {
+		return RespondWithError(nil, "Email is a required field", http.StatusBadRequest, &tracingContext)
+	}
+
+	_, err := a.Deps.AWS.Cognito.ResendCode(email.Email)
+
+	if err != nil {
+		var ae smithy.APIError
+		if errors.As(err, &ae) {
+			switch ae.ErrorCode() {
+			case "InvalidParameterException":
+				return RespondWithError(err, "Invalid parameters provided", http.StatusBadRequest, &tracingContext)
+			case "NotAuthorizedException":
+				return RespondWithError(err, "Not authorized", http.StatusBadRequest, &tracingContext)
+			case "ExpiredCodeException":
+				return RespondWithError(err, "expired code used. request for a new one", http.StatusBadRequest, &tracingContext)
+			case "CodeMismatchException":
+				return RespondWithError(err, "Invalid code used", http.StatusBadRequest, &tracingContext)
+			}
+		}
+	}
+
+	response := map[string]interface{}{
+		"delivered": true,
+	}
+	return &ServerResponse{Payload: response}
+
 }
 
 func (a *API) resetPassword(w http.ResponseWriter, r *http.Request) *ServerResponse {

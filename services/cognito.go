@@ -21,6 +21,7 @@ type ICognitoService interface {
 	Login(l *model.LoginRequest) (*model.AuthResponse, error)
 	SignUp(r *model.RegistrationRequest) (*model.SignupResponse, error)
 	ConfirmSignUp(v *model.VerificationRequest) (bool, error)
+	ResendCode(email string) (*cognito.ResendConfirmationCodeOutput, error)
 	ForgetPassword(email string) (*cognito.ForgotPasswordOutput, error)
 	ConfirmForgotPassword(p *model.ConfirmForgotPasswordRequest) (bool, error)
 	ChangePassword(p *model.ChangePassword) (bool, error)
@@ -81,6 +82,8 @@ func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error
 }
 
 func (c CognitoService) SignUp(r *model.RegistrationRequest) (*model.SignupResponse, error) {
+	//name := strings.Split(r.FullName, " ")
+	//username := fmt.Sprintf("%s%s", name[0], name[1])
 	params := &cognito.SignUpInput{
 		ClientId:   aws.String(c.config.CognitoAppClientID),
 		Password:   aws.String(r.Password),
@@ -88,12 +91,16 @@ func (c CognitoService) SignUp(r *model.RegistrationRequest) (*model.SignupRespo
 		SecretHash: aws.String(c.generateCognitoSecretHash(r.Email)),
 		UserAttributes: []types.AttributeType{
 			{
-				Name:  aws.String("phone"),
+				Name:  aws.String("phone_number"),
 				Value: aws.String(r.Phone),
 			},
 			{
 				Name:  aws.String("name"),
 				Value: aws.String(r.FullName),
+			},
+			{
+				Name:  aws.String("email"),
+				Value: aws.String(r.Email),
 			},
 		},
 	}
@@ -127,9 +134,23 @@ func (c CognitoService) ConfirmSignUp(v *model.VerificationRequest) (bool, error
 	return true, nil
 }
 
+func (c CognitoService) ResendCode(email string) (*cognito.ResendConfirmationCodeOutput, error) {
+	params := &cognito.ResendConfirmationCodeInput{
+		ClientId:   aws.String(c.config.CognitoAppClientID),
+		Username:   aws.String(email),
+		SecretHash: aws.String(c.generateCognitoSecretHash(email)),
+	}
+
+	resp, err := c.cognitoClient.ResendConfirmationCode(context.TODO(), params)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 func (c CognitoService) ForgetPassword(email string) (*cognito.ForgotPasswordOutput, error) {
 	params := &cognito.ForgotPasswordInput{
-		ClientId:   aws.String(c.generateCognitoSecretHash(email)),
+		ClientId:   aws.String(c.config.CognitoAppClientID),
 		Username:   aws.String(email),
 		SecretHash: aws.String(c.generateCognitoSecretHash(email)),
 	}
