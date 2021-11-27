@@ -163,7 +163,7 @@ func (c CognitoService) ForgetPassword(email string) (*cognito.ForgotPasswordOut
 
 func (c CognitoService) ConfirmForgotPassword(p *model.ConfirmForgotPasswordRequest) (bool, error) {
 	params := &cognito.ConfirmForgotPasswordInput{
-		ClientId:         aws.String(c.generateCognitoSecretHash(p.Username)),
+		ClientId:         aws.String(c.config.CognitoAppClientID),
 		ConfirmationCode: aws.String(p.Code),
 		Password:         aws.String(p.ProposedPassword),
 		Username:         aws.String(p.Username),
