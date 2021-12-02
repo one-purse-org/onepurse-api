@@ -50,6 +50,8 @@ func (a *API) SetupServerHandler() http.Handler {
 	mux.Mount("/auth", a.AuthRoutes(mux))
 	mux.Mount("/user", a.UserRoutes())
 	mux.Mount("/account", a.AccountRoutes())
+	mux.Mount("/admin", a.AdminRoutes())
+	mux.Mount("/media", a.MediaRoutes())
 
 	return mux
 }
