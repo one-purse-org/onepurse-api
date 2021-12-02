@@ -25,6 +25,7 @@ type ICognitoService interface {
 	ForgetPassword(email string) (*cognito.ForgotPasswordOutput, error)
 	ConfirmForgotPassword(p *model.ConfirmForgotPasswordRequest) (bool, error)
 	ChangePassword(p *model.ChangePassword) (bool, error)
+	UpdateUsername(ua *model.UpdateUsername) error
 }
 
 type CognitoService struct {
@@ -82,8 +83,6 @@ func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error
 }
 
 func (c CognitoService) SignUp(r *model.RegistrationRequest) (*model.SignupResponse, error) {
-	//name := strings.Split(r.FullName, " ")
-	//username := fmt.Sprintf("%s%s", name[0], name[1])
 	params := &cognito.SignUpInput{
 		ClientId:   aws.String(c.config.CognitoAppClientID),
 		Password:   aws.String(r.Password),
@@ -187,4 +186,21 @@ func (c CognitoService) ChangePassword(p *model.ChangePassword) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func (c CognitoService) UpdateUsername(ua *model.UpdateUsername) error {
+	params := &cognito.UpdateUserAttributesInput{
+		AccessToken: aws.String(ua.AccessToken),
+		UserAttributes: []types.AttributeType{
+			{
+				Name:  aws.String("preferred_username"),
+				Value: aws.String(ua.PreferredUsername),
+			},
+		},
+	}
+	_, err := c.cognitoClient.UpdateUserAttributes(context.TODO(), params)
+	if err != nil {
+		return err
+	}
+	return nil
 }

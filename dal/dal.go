@@ -13,7 +13,8 @@ type DAL struct {
 	// define a session to utilize transactions
 	Session mongo.Session
 
-	UserDAL IUserDAL
+	UserDAL     IUserDAL
+	CurrencyDAL ICurrencyDAL
 }
 
 func (d *DAL) setupDALObjects(cfg *config.Config) error {
@@ -34,6 +35,7 @@ func (d *DAL) setupDALObjects(cfg *config.Config) error {
 		return errors.Wrapf(err, "[Mongo]: unable to create a session")
 	}
 	d.UserDAL = NewUserDAL(d.DB)
+	d.CurrencyDAL = NewCurrencyDAL(d.DB)
 	return nil
 }
 
