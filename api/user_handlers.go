@@ -15,8 +15,9 @@ func (a *API) UserRoutes() http.Handler {
 	router := chi.NewRouter()
 	router.Use(Authorization)
 	router.Method("POST", "/change_password", Handler(a.changePassword))
-	router.Method("POST", "/create_username", Handler(a.createUserName))
-	router.Method("PATCH", "/create_transaction_password", Handler(a.createTransactionPassword))
+	router.Method("POST", "/{userID}/create_username", Handler(a.createUserName))
+	router.Method("PATCH", "/{userID}/create_transaction_password", Handler(a.createTransactionPassword))
+	router.Method("PATCH", "/{userID}/update_kyc_information", Handler(a.updateKYCInformation))
 
 	return router
 }
@@ -92,6 +93,7 @@ func (a *API) createTransactionPassword(w http.ResponseWriter, r *http.Request) 
 func (a *API) createUserName(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	var param model.UpdateUsername
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	userID := chi.URLParam(r, "userID")
 
 	if err := decodeJSONBody(&tracingContext, r.Body, &param); err != nil {
 		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
@@ -122,9 +124,69 @@ func (a *API) createUserName(w http.ResponseWriter, r *http.Request) *ServerResp
 		}
 	}
 
+	err = a.Deps.DAL.UserDAL.UpdateUser(userID, bson.D{{"username", param.PreferredUsername}})
+	if err != nil {
+		return RespondWithError(err, "Failed to update user name", http.StatusInternalServerError, &tracingContext)
+
+	}
+
 	response := map[string]interface{}{
 		"message": "transaction password updated",
 	}
 
 	return &ServerResponse{Payload: response}
+}
+
+func (a *API) updateKYCInformation(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	var user model.User
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	userID := chi.URLParam(r, "userID")
+
+	if err := decodeJSONBody(&tracingContext, r.Body, &user); err != nil {
+		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+	}
+
+	if user.Location == "" {
+		return RespondWithError(nil, "location is required", http.StatusBadRequest, &tracingContext)
+	}
+	if user.Nationality == "" {
+		return RespondWithError(nil, "nationality is required", http.StatusBadRequest, &tracingContext)
+	}
+	if user.DateOfBirth.IsZero() {
+		return RespondWithError(nil, "date_of_birth is required", http.StatusBadRequest, &tracingContext)
+	}
+	if user.Gender == "" {
+		return RespondWithError(nil, "gender is required", http.StatusBadRequest, &tracingContext)
+	}
+	if user.IDType == "" {
+		return RespondWithError(nil, "id_type is required", http.StatusBadRequest, &tracingContext)
+	}
+	if user.IDNumber == "" {
+		return RespondWithError(nil, "id_number is required", http.StatusBadRequest, &tracingContext)
+	}
+	if user.IDExpiryDate.IsZero() {
+		return RespondWithError(nil, "id_expiry_date is required", http.StatusBadRequest, &tracingContext)
+	}
+	if user.IDImage == "" {
+		return RespondWithError(nil, "id_image is required", http.StatusBadRequest, &tracingContext)
+	}
+
+	val, err := bson.Marshal(user)
+	if err != nil {
+		return RespondWithError(err, "Failed to marshal to update value", http.StatusInternalServerError, &tracingContext)
+
+	}
+
+	var doc bson.D
+	err = bson.Unmarshal(val, &doc)
+	if err != nil {
+		return RespondWithError(err, "Failed to unmarshal update value to doc", http.StatusInternalServerError, &tracingContext)
+	}
+
+	err = a.Deps.DAL.UserDAL.UpdateUser(userID, doc)
+	if err != nil {
+		return RespondWithError(err, "Failed to update KYC information", http.StatusInternalServerError, &tracingContext)
+	}
+
+	return &ServerResponse{Payload: nil}
 }

@@ -3,18 +3,30 @@ package model
 import "time"
 
 type User struct {
-	ID                  string    `bson:"_id" json:"id"`
-	FullName            string    `bson:"full_name" json:"full_name"`
-	UserName            string    `bson:"user_name" json:"user_name"`
-	Email               string    `bson:"email" json:"email"`
-	TransactionPassword string    `bson:"transaction_password" json:"transaction_password"`
-	PlaidAccessToken    string    `bson:"plaid_access_token" json:"plaid_access_token"`
-	Avatar              string    `bson:"avatar" json:"avatar"`
-	IDType              string    `bson:"id_type" json:"id_type"`
-	IDImage             string    `bson:"id_image" json:"id_image"`
-	IsIDVerified        bool      `bson:"is_id_verified" json:"is_id_verified"`
-	CreatedAt           time.Time `bson:"created_at" json:"created_at"`
-	Active              bool      `bson:"active" json:"active"`
+	ID                  string              `bson:"_id" json:"id"`
+	FullName            string              `bson:"full_name" json:"full_name"`
+	UserName            string              `bson:"username" json:"username"`
+	Email               string              `bson:"email" json:"email"`
+	TransactionPassword string              `bson:"transaction_password" json:"transaction_password"`
+	PlaidAccessToken    string              `bson:"plaid_access_token" json:"plaid_access_token"`
+	Location            string              `bson:"location" json:"location"`
+	Nationality         string              `bson:"nationality" json:"nationality"`
+	DateOfBirth         time.Time           `bson:"date_of_birth" json:"date_of_birth"`
+	Gender              string              `json:"gender" bson:"gender"`
+	Avatar              string              `bson:"avatar" json:"avatar"`
+	IDType              string              `bson:"id_type" json:"id_type"`
+	IDNumber            string              `bson:"id_number" json:"id_number"`
+	IDExpiryDate        time.Time           `bson:"id_expiry_date" json:"id_expiry_date"`
+	PreferredCurrency   []PreferredCurrency `bson:"preferred_currency" json:"preferred_currency"`
+	IDImage             string              `bson:"id_image" json:"id_image"`
+	IsIDVerified        bool                `bson:"is_id_verified" json:"is_id_verified"`
+	CreatedAt           time.Time           `bson:"created_at" json:"created_at"`
+	Active              bool                `bson:"active" json:"active"`
+}
+
+type PreferredCurrency struct {
+	Label string `bson:"slug" json:"label"`
+	Slug  string `bson:"slug" json:"slug"`
 }
 
 type LoginRequest struct {
@@ -23,6 +35,7 @@ type LoginRequest struct {
 }
 
 type AuthResponse struct {
+	User         User      `json:"user"`
 	ID           string    `json:"id"`
 	Email        string    `json:"email"`
 	AccessToken  string    `json:"access_token"`
