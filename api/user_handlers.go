@@ -188,5 +188,9 @@ func (a *API) updateKYCInformation(w http.ResponseWriter, r *http.Request) *Serv
 		return RespondWithError(err, "Failed to update KYC information", http.StatusInternalServerError, &tracingContext)
 	}
 
-	return &ServerResponse{Payload: nil}
+	response := map[string]interface{}{
+		"message": "KYC information successfully updated",
+	}
+
+	return &ServerResponse{Payload: response}
 }
