@@ -15,6 +15,7 @@ func (a *API) UserRoutes() http.Handler {
 	router := chi.NewRouter()
 	router.Use(Authorization)
 	router.Method("POST", "/change_password", Handler(a.changePassword))
+	router.Method("POST", "/create_username", Handler(a.createUserName))
 	router.Method("PATCH", "/create_transaction_password", Handler(a.createTransactionPassword))
 
 	return router
@@ -79,6 +80,46 @@ func (a *API) createTransactionPassword(w http.ResponseWriter, r *http.Request) 
 	err := a.Deps.DAL.UserDAL.UpdateUser(user.ID, bson.D{{"$set", bson.D{{"transaction_password", user.TransactionPassword}}}})
 	if err != nil {
 		return RespondWithError(err, "Failed to update transaction password", http.StatusInternalServerError, &tracingContext)
+	}
+
+	response := map[string]interface{}{
+		"message": "transaction password updated",
+	}
+
+	return &ServerResponse{Payload: response}
+}
+
+func (a *API) createUserName(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	var param model.UpdateUsername
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+
+	if err := decodeJSONBody(&tracingContext, r.Body, &param); err != nil {
+		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+	}
+
+	if param.AccessToken == "" {
+		return RespondWithError(nil, "access_token is required", http.StatusBadRequest, &tracingContext)
+
+	}
+	if param.PreferredUsername == "" {
+		return RespondWithError(nil, "preferred_username is required", http.StatusBadRequest, &tracingContext)
+	}
+
+	err := a.Deps.AWS.Cognito.UpdateUsername(&param)
+	if err != nil {
+		var ae smithy.APIError
+		if errors.As(err, &ae) {
+			switch ae.ErrorCode() {
+			case "InvalidParameterException":
+				return RespondWithError(err, "Invalid parameters provided", http.StatusBadRequest, &tracingContext)
+			case "NotAuthorizedException":
+				return RespondWithError(err, "Not authorized", http.StatusBadRequest, &tracingContext)
+			case "ExpiredCodeException":
+				return RespondWithError(err, "expired code used. request for a new one", http.StatusBadRequest, &tracingContext)
+			case "CodeMismatchException":
+				return RespondWithError(err, "Invalid code used", http.StatusBadRequest, &tracingContext)
+			}
+		}
 	}
 
 	response := map[string]interface{}{

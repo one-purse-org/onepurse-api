@@ -59,3 +59,8 @@ type ChangePassword struct {
 	PreviousPassword string `json:"previous_password"`
 	ProposedPassword string `json:"proposed_password"`
 }
+
+type UpdateUsername struct {
+	AccessToken       string `json:"access_token"`
+	PreferredUsername string `json:"preferred_username"`
+}
