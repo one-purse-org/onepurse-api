@@ -82,7 +82,12 @@ func (u UserDAL) FindAll() (*[]model.User, error) {
 func (u UserDAL) FindByUsername(username string) (*model.User, error) {
 	var user *model.User
 
-	err := u.Collection.FindOne(context.TODO(), bson.D{{"$or", []interface{}{"user_name", username}}}).Decode(&user)
+	err := u.Collection.FindOne(context.TODO(), bson.M{
+		"$or": []bson.M{
+			bson.M{"user_name": username},
+			bson.M{"email": username},
+		},
+	}).Decode(&user)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
