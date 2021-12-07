@@ -20,5 +20,6 @@ require (
 	github.com/plaid/plaid-go v1.6.0
 	github.com/sirupsen/logrus v1.8.1
 	go.mongodb.org/mongo-driver v1.7.2
+	golang.org/x/crypto v0.0.0-20201217014255-9d1352758620
 	gopkg.in/caarlos0/env.v2 v2.0.0-20161013201842-d0de832ed2fb
 )

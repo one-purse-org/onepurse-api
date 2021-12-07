@@ -4,6 +4,7 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/go-chi/chi"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
+	"github.com/isongjosiah/work/onepurse-api/helpers"
 	"github.com/isongjosiah/work/onepurse-api/tracing"
 	"github.com/pkg/errors"
 	"go.mongodb.org/mongo-driver/bson"
@@ -65,20 +66,22 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) *ServerResp
 
 func (a *API) createTransactionPassword(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	var user model.User
+	userID := chi.URLParam(r, "userID")
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
 
 	if err := decodeJSONBody(&tracingContext, r.Body, &user); err != nil {
 		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
 	}
 
-	if user.ID == "" {
-		return RespondWithError(nil, "User ID is required", http.StatusBadRequest, &tracingContext)
-	}
 	if user.TransactionPassword == "" {
 		return RespondWithError(nil, "Transaction password is required", http.StatusBadRequest, &tracingContext)
 	}
 
-	err := a.Deps.DAL.UserDAL.UpdateUser(user.ID, bson.D{{"$set", bson.D{{"transaction_password", user.TransactionPassword}}}})
+	password, err := helpers.HashPassword(user.TransactionPassword)
+	if err != nil {
+		return RespondWithError(err, "Failed to hash password", http.StatusInternalServerError, &tracingContext)
+	}
+	err = a.Deps.DAL.UserDAL.UpdateUser(userID, bson.D{{"$set", bson.D{{"transaction_password", password}}}})
 	if err != nil {
 		return RespondWithError(err, "Failed to update transaction password", http.StatusInternalServerError, &tracingContext)
 	}
