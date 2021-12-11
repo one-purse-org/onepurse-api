@@ -23,7 +23,14 @@ func (a *API) uploadMedia(w http.ResponseWriter, r *http.Request) *ServerRespons
 	if err != nil {
 		return RespondWithError(err, "Could not parse file", http.StatusBadRequest, &tracingContext)
 	}
-	location, s3err := a.Deps.AWS.S3.Upload(header.Filename, file)
+	folder := r.URL.Query().Get("folder")
+	var path string
+	if folder == "" {
+		path = header.Filename
+	} else {
+		path = fmt.Sprintf("%s/%s", folder, header.Filename)
+	}
+	location, s3err := a.Deps.AWS.S3.Upload(path, file)
 	if s3err != nil {
 		fmt.Println(s3err)
 		var ae smithy.APIError
