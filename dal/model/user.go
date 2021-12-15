@@ -80,9 +80,18 @@ type UpdateUsername struct {
 }
 
 type Notification struct {
-	ID        string    `bson:"id" json:"id"`
+	ID        string    `bson:"_id" json:"id"`
 	Title     string    `bson:"title" json:"title"`
 	Message   string    `bson:"message" json:"message"`
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 	Read      bool      `bson:"read" json:"read"`
+}
+
+// UserAccount is the model for user bank account information
+type UserAccount struct {
+	ID        string    `bson:"_id" json:"id"`
+	User      *User     `bson:"user" json:"user"`
+	Name      string    `bson:"name" json:"name"`
+	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+	UpdatedAt time.Time `bson:"updated_at" json:"updated_at"`
 }

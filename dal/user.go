@@ -36,9 +36,8 @@ func (u UserDAL) Add(user *model.User) error {
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return errors.New("user record already exists")
-		} else {
-			return err
 		}
+		return err
 	}
 	return nil
 }
@@ -51,9 +50,8 @@ func (u UserDAL) FindByID(userID string) (*model.User, error) {
 		if err == mongo.ErrNoDocuments {
 			findErr := fmt.Sprintf("record for user %s not found", userID)
 			return nil, errors.New(findErr)
-		} else {
-			return nil, err
 		}
+		return nil, err
 	}
 	return user, nil
 }
@@ -65,10 +63,9 @@ func (u UserDAL) FindAll() (*[]model.User, error) {
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return &[]model.User{}, nil // TODO(josiah): confirm that this logic implements what you have in mind
-		} else {
-			logrus.Fatalf("[Mongo]: error fetching users : %s", err.Error())
-			return nil, err
 		}
+		logrus.Fatalf("[Mongo]: error fetching users : %s", err.Error())
+		return nil, err
 	}
 
 	if err = cursor.All(context.TODO(), &user); err != nil {
