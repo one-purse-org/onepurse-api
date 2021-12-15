@@ -53,6 +53,11 @@ func Authorization(next http.Handler) http.Handler {
 			return
 		}
 
+		if r.Header.Get("Authorization") == "" {
+			writeErrorResponse(w, http.StatusUnauthorized, "Not authorized")
+			return
+		}
+
 		awsJwt := strings.Split(r.Header.Get("Authorization"), " ")[1]
 		if awsJwt == "" {
 			writeErrorResponse(w, http.StatusUnauthorized, "Not authorized")

@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -11,9 +10,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"mime/multipart"
+	"strings"
 )
 
-const partSize = 2 * 1024 * 1024
+const partSize = 5 * 1024 * 1024
 
 type IS3Service interface {
 	Upload(filename string, file multipart.File) (string, error)
@@ -48,15 +48,17 @@ func NewS3Service(cfg *config.Config) (IS3Service, error) {
 }
 
 func (s S3Service) Upload(filename string, file multipart.File) (string, error) {
+	temp := strings.Split(filename, ".")
 	params := &s3.PutObjectInput{
-		Bucket: aws.String(s.config.S3Bucket),
-		Key:    aws.String(filename),
-		ACL:    "public-read",
-		Body:   file,
+		Bucket:      aws.String(s.config.S3Bucket),
+		Key:         aws.String(filename),
+		ACL:         "public-read",
+		Body:        file,
+		ContentType: aws.String(temp[len(temp)-1]),
 	}
 	n, err := s.Uploader.Upload(context.TODO(), params)
 	if err != nil {
-		return "", fmt.Errorf("failed to upload file to %s, %v", filename, err)
+		return "", err
 	}
 	return n.Location, nil
 }

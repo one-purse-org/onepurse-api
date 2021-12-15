@@ -21,6 +21,7 @@ type User struct {
 	IDImage             string              `bson:"id_image" json:"id_image"`
 	IsIDVerified        bool                `bson:"is_id_verified" json:"is_id_verified"`
 	CreatedAt           time.Time           `bson:"created_at" json:"created_at"`
+	DeviceToken         string              `bson:"device_token" json:"device_token"`
 	Active              bool                `bson:"active" json:"active"`
 }
 
@@ -76,4 +77,12 @@ type ChangePassword struct {
 type UpdateUsername struct {
 	AccessToken       string `json:"access_token"`
 	PreferredUsername string `json:"preferred_username"`
+}
+
+type Notification struct {
+	ID        string    `bson:"id" json:"id"`
+	Title     string    `bson:"title" json:"title"`
+	Message   string    `bson:"message" json:"message"`
+	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+	Read      bool      `bson:"read" json:"read"`
 }
