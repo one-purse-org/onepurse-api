@@ -9,6 +9,7 @@ import (
 type AWS struct {
 	Cognito ICognitoService
 	S3      IS3Service
+	SNS     ISNSService
 }
 
 func NewAWS(cfg *config.Config) (*AWS, error) {
@@ -22,9 +23,15 @@ func NewAWS(cfg *config.Config) (*AWS, error) {
 		return nil, errors.Wrapf(err, fmt.Sprintf("%v Cognito", "Failed to setup service:"))
 	}
 
+	sns, err := NewSNSService(cfg)
+	if err != nil {
+		return nil, errors.Wrapf(err, fmt.Sprintf("%v SNS", "Failed to setup service:"))
+	}
+
 	aws := &AWS{
 		Cognito: cognito,
 		S3:      s3,
+		SNS:     sns,
 	}
 
 	return aws, nil
