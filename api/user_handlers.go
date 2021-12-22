@@ -500,7 +500,75 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 }
 
 func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResponse {
-	return &ServerResponse{
-		Payload: nil,
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	transactionType := r.URL.Query().Get("transaction-type")
+	userId := chi.URLParam(r, "userID")
+	user, err := a.Deps.DAL.UserDAL.FindByID(userId)
+	if err != nil {
+		return RespondWithError(err, "unable to get user information", http.StatusInternalServerError, &tracingContext)
+	}
+
+	switch transactionType {
+	case "all":
+		var response map[string]interface{}
+		transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(user.ID)
+		if err != nil {
+			return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
+		}
+		withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(user.ID)
+		if err != nil {
+			return RespondWithError(err, "unable to fetch withdraws", http.StatusInternalServerError, &tracingContext)
+		}
+		deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(user.ID)
+		if err != nil {
+			return RespondWithError(err, "unable to fetch deposits", http.StatusInternalServerError, &tracingContext)
+		}
+		exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(user.ID)
+		if err != nil {
+			return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
+		}
+
+		response["transfer"] = transfers
+		response["withdraws"] = withdraws
+		response["deposits"] = deposits
+		response["exchanges"] = exchanges
+
+		return &ServerResponse{
+			Payload: response,
+		}
+	case "transfers":
+		transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(user.ID)
+		if err != nil {
+			return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
+		}
+		return &ServerResponse{
+			Payload: transfers,
+		}
+	case "withdraws":
+		withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(user.ID)
+		if err != nil {
+			return RespondWithError(err, "unable to fetch withdraws", http.StatusInternalServerError, &tracingContext)
+		}
+		return &ServerResponse{
+			Payload: withdraws,
+		}
+	case "deposit":
+		deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(user.ID)
+		if err != nil {
+			return RespondWithError(err, "unable to fetch deposits", http.StatusInternalServerError, &tracingContext)
+		}
+		return &ServerResponse{
+			Payload: deposits,
+		}
+	case "exchange":
+		exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(user.ID)
+		if err != nil {
+			return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
+		}
+		return &ServerResponse{
+			Payload: exchanges,
+		}
+	default:
+		return RespondWithError(nil, "This transaction type is not supported", http.StatusInternalServerError, &tracingContext)
 	}
 }
