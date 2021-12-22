@@ -61,13 +61,12 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) *ServerResponse {
 			}
 		}
 	}
-
 	user, err := a.Deps.DAL.UserDAL.FindByUsername(login.Username)
 	if err != nil {
 		return RespondWithError(err, "Failed to fetch user information", http.StatusInternalServerError, &tracingContext)
 
 	}
-	authResponse.User = *user
+	authResponse.User = user
 
 	return &ServerResponse{Payload: authResponse}
 }

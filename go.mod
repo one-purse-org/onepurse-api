@@ -23,5 +23,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	go.mongodb.org/mongo-driver v1.7.2
 	golang.org/x/crypto v0.0.0-20201217014255-9d1352758620
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	gopkg.in/caarlos0/env.v2 v2.0.0-20161013201842-d0de832ed2fb
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
