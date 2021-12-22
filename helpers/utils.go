@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
+	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,4 +22,19 @@ func DoSufficientFundsCheck(user *model.User, amount float32, currency string) b
 		return false
 	}
 	return true
+}
+
+func MarshalStructToBSONDoc(structure interface{}) (bson.D, error) {
+	var doc bson.D
+
+	val, err := bson.Marshal(structure)
+	if err != nil {
+		return nil, err
+	}
+
+	err = bson.Unmarshal(val, &doc)
+	if err != nil {
+		return nil, err
+	}
+	return doc, nil
 }

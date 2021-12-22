@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"github.com/aws/smithy-go"
 	"github.com/go-chi/chi"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
@@ -186,16 +185,9 @@ func (a *API) updateKYCInformation(w http.ResponseWriter, r *http.Request) *Serv
 		return RespondWithError(nil, "id_image is required", http.StatusBadRequest, &tracingContext)
 	}
 
-	val, err := bson.Marshal(user)
+	doc, err := helpers.MarshalStructToBSONDoc(user)
 	if err != nil {
-		return RespondWithError(err, "Failed to marshal to update value", http.StatusInternalServerError, &tracingContext)
-
-	}
-
-	var doc bson.D
-	err = bson.Unmarshal(val, &doc)
-	if err != nil {
-		return RespondWithError(err, "Failed to unmarshal update value to doc", http.StatusInternalServerError, &tracingContext)
+		return RespondWithError(err, "Failed to marshal to bson document", http.StatusInternalServerError, &tracingContext)
 	}
 
 	err = a.Deps.DAL.UserDAL.UpdateUser(userID, doc)
@@ -257,6 +249,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		return &ServerResponse{
 			Payload: response,
 		}
+
 	case "withdraw":
 		var withdrawal model.Withdrawal
 		if err := decodeJSONBody(&tracingContext, r.Body, &withdrawal); err != nil {
@@ -290,6 +283,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		return &ServerResponse{
 			Payload: response,
 		}
+
 	case "deposit":
 		var deposit model.Deposit
 		if err := decodeJSONBody(&tracingContext, r.Body, &deposit); err != nil {
@@ -322,22 +316,186 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		return &ServerResponse{
 			Payload: response,
 		}
+
 	case "exchange":
+		var exchange model.Exchange
+		if err := decodeJSONBody(&tracingContext, r.Body, &exchange); err != nil {
+			return RespondWithError(nil, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
+		}
+		if exchange.BaseAmount == 0 || exchange.BaseCurrency == "" {
+			return RespondWithError(nil, "base amount and currency is required", http.StatusBadRequest, &tracingContext)
+		}
+		if exchange.ExchangeAmount == 0 || exchange.ExchangeCurrency == "" {
+			return RespondWithError(nil, "exchange amount and currency is required", http.StatusBadRequest, &tracingContext)
+		}
+		if exchange.IsCryptoExchange == false && (exchange.AgentAccount == nil || exchange.PaymentChannel == "") {
+			return RespondWithError(nil, "agent account and payment channel is required", http.StatusBadRequest, &tracingContext)
+		}
+		if exchange.IsCryptoExchange == true && (exchange.BlockchainChannel == "" || exchange.CryptoWalletAddress == "") {
+			return RespondWithError(nil, "crypto information is not provided", http.StatusBadRequest, &tracingContext)
+		}
+
+		pass := helpers.DoSufficientFundsCheck(user, exchange.BaseAmount, exchange.BaseCurrency)
+		if !pass {
+			return RespondWithError(nil, "insufficient funds to transfer from. Top-up Wallet", http.StatusBadRequest, &tracingContext)
+		}
+
+		exchange.CreatedAt = time.Now()
+		exchange.ID = cuid.New()
+		exchange.Status = "initiated"
+		exchange.User = user
+		err := a.Deps.DAL.TransactionDAL.CreateExchange(&exchange)
+		if err != nil {
+			return RespondWithError(err, "Failed to initiate transaction. Please try again", http.StatusBadRequest, &tracingContext)
+		}
+		response := map[string]interface{}{
+			"message": "successfully initiated exchange",
+		}
+		return &ServerResponse{
+			Payload: response,
+		}
 
 	default:
 		return RespondWithError(nil, "This transaction type is not supported", http.StatusBadRequest, &tracingContext)
 	}
-	response := map[string]interface{}{
-		"message": fmt.Sprintf("transaction type %s does not exist", transactionType),
-	}
-	return &ServerResponse{
-		Payload: response,
-	}
 }
 
 func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerResponse {
-	return &ServerResponse{
-		Payload: nil,
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	transactionType := r.URL.Query().Get("transaction-type")
+	transactionId := chi.URLParam(r, "transactionID")
+
+	switch transactionType {
+	case "transfer":
+		var transfer model.Transfer
+
+		if err := decodeJSONBody(&tracingContext, r.Body, &transfer); err != nil {
+			return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+		}
+
+		doc, err := helpers.MarshalStructToBSONDoc(transfer)
+		if err != nil {
+			return RespondWithError(err, "Failed to marshal to bson document", http.StatusInternalServerError, &tracingContext)
+		}
+
+		tempTransfer, err := a.Deps.DAL.TransactionDAL.GetTransferByID(transactionId)
+		if err != nil {
+			return RespondWithError(err, "error fetching transfer information", http.StatusBadRequest, &tracingContext)
+		}
+		if tempTransfer.Status == "completed" {
+			// No update should be undertaken
+			return RespondWithError(nil, "cannot update a completed transaction", http.StatusForbidden, &tracingContext)
+		}
+
+		transfer.UpdatedAt = time.Now()
+		err = a.Deps.DAL.TransactionDAL.UpdateTransfer(transactionId, doc)
+		if err != nil {
+			return RespondWithError(err, "unable to update transfer information", http.StatusInternalServerError, &tracingContext)
+		}
+
+		response := map[string]interface{}{
+			"message": "transfer information updated successfully",
+		}
+		return &ServerResponse{
+			Payload: response,
+		}
+	case "withdraw":
+		var withdrawal model.Withdrawal
+
+		if err := decodeJSONBody(&tracingContext, r.Body, &withdrawal); err != nil {
+			return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+		}
+
+		doc, err := helpers.MarshalStructToBSONDoc(withdrawal)
+		if err != nil {
+			return RespondWithError(err, "Failed to marshal to bson document", http.StatusInternalServerError, &tracingContext)
+		}
+
+		tempWithdrawal, err := a.Deps.DAL.TransactionDAL.GetWithdrawalByID(transactionId)
+		if err != nil {
+			return RespondWithError(err, "error fetching withdrawal information", http.StatusBadRequest, &tracingContext)
+		}
+		if tempWithdrawal.Status == "completed" {
+			return RespondWithError(nil, "cannot update a completed transaction", http.StatusForbidden, &tracingContext)
+
+		}
+
+		withdrawal.UpdatedAt = time.Now()
+		err = a.Deps.DAL.TransactionDAL.UpdateWithdrawal(transactionId, doc)
+		if err != nil {
+			return RespondWithError(err, "unable to update withdrawal information", http.StatusInternalServerError, &tracingContext)
+		}
+
+		response := map[string]interface{}{
+			"message": "withdrawal information updated successfully",
+		}
+		return &ServerResponse{
+			Payload: response,
+		}
+	case "deposit":
+		var deposit model.Deposit
+		if err := decodeJSONBody(&tracingContext, r.Body, &deposit); err != nil {
+			return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+		}
+
+		doc, err := helpers.MarshalStructToBSONDoc(deposit)
+		if err != nil {
+			return RespondWithError(err, "Failed to marshal to bson document", http.StatusInternalServerError, &tracingContext)
+		}
+
+		tempDeposit, err := a.Deps.DAL.TransactionDAL.GetDepositByID(transactionId)
+		if err != nil {
+			return RespondWithError(err, "error fetching deposit information", http.StatusBadRequest, &tracingContext)
+		}
+		if tempDeposit.Status == "completed" {
+			return RespondWithError(nil, "cannot update a completed transaction", http.StatusForbidden, &tracingContext)
+		}
+
+		deposit.UpdatedAt = time.Now()
+		err = a.Deps.DAL.TransactionDAL.UpdateDeposit(transactionId, doc)
+		if err != nil {
+			return RespondWithError(err, "unable to update deposit information", http.StatusInternalServerError, &tracingContext)
+		}
+
+		response := map[string]interface{}{
+			"message": "update information updated successfully",
+		}
+		return &ServerResponse{
+			Payload: response,
+		}
+	case "exchange":
+		var exchange model.Exchange
+
+		if err := decodeJSONBody(&tracingContext, r.Body, &exchange); err != nil {
+			return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+		}
+
+		doc, err := helpers.MarshalStructToBSONDoc(exchange)
+		if err != nil {
+			return RespondWithError(err, "Failed to marshal to bson document", http.StatusInternalServerError, &tracingContext)
+		}
+		tempExchange, err := a.Deps.DAL.TransactionDAL.GetExchangeByID(transactionId)
+		if err != nil {
+			return RespondWithError(err, "error fetching exchange information", http.StatusForbidden, &tracingContext)
+		}
+		if tempExchange.Status == "completed" {
+			return RespondWithError(nil, "cannot update a completed transaction", http.StatusForbidden, &tracingContext)
+		}
+
+		exchange.UpdatedAt = time.Now()
+		err = a.Deps.DAL.TransactionDAL.UpdateExchange(transactionId, doc)
+		if err != nil {
+			return RespondWithError(err, "unable to update exchange information", http.StatusInternalServerError, &tracingContext)
+		}
+
+		response := map[string]interface{}{
+			"message": "exchange information updated successfully",
+		}
+		return &ServerResponse{
+			Payload: response,
+		}
+	default:
+		return RespondWithError(nil, "This transaction type is not supported", http.StatusInternalServerError, &tracingContext)
 	}
 }
 

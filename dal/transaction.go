@@ -15,12 +15,18 @@ type ITransactionDAL interface {
 	CreateTransfer(transfer *model.Transfer) error
 	CreateWithdrawal(withdrawal *model.Withdrawal) error
 	CreateDeposit(deposit *model.Deposit) error
+	CreateExchange(exchange *model.Exchange) error
+
 	GetTransferByID(transferID string) (*model.Transfer, error)
 	GetWithdrawalByID(withdrawalID string) (*model.Withdrawal, error)
 	GetDepositByID(depositID string) (*model.Deposit, error)
+	GetExchangeByID(exchangeID string) (*model.Exchange, error)
+
 	UpdateTransfer(transferID string, updateParam bson.D) error
 	UpdateWithdrawal(withdrawalID string, updateParam bson.D) error
 	UpdateDeposit(depositID string, updateParam bson.D) error
+	UpdateExchange(exchangeID string, updateParam bson.D) error
+
 	CheckTimeLimit() error
 }
 
@@ -75,6 +81,17 @@ func (t TransactionDAL) CreateDeposit(deposit *model.Deposit) error {
 	return nil
 }
 
+func (t TransactionDAL) CreateExchange(exchange *model.Exchange) error {
+	_, err := t.ExchangeCollection.InsertOne(context.TODO(), exchange)
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return errors.New("exchange record already exists. You might be repeating a transaction")
+		}
+		return err
+	}
+	return nil
+}
+
 func (t TransactionDAL) GetTransferByID(transferID string) (*model.Transfer, error) {
 	var transfer *model.Transfer
 	err := t.TransferCollection.FindOne(context.TODO(), bson.D{{"_id", transferID}}).Decode(transfer)
@@ -117,6 +134,20 @@ func (t TransactionDAL) GetDepositByID(depositID string) (*model.Deposit, error)
 	return deposit, nil
 }
 
+func (t TransactionDAL) GetExchangeByID(exchangeID string) (*model.Exchange, error) {
+	var exchange *model.Exchange
+	err := t.ExchangeCollection.FindOne(context.TODO(), bson.D{{"_id", exchangeID}}).Decode(exchange)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			findErr := fmt.Sprintf("record for exchange %s not found", exchangeID)
+			return nil, errors.New(findErr)
+		}
+		return nil, err
+	}
+	return exchange, nil
+}
+
 func (t TransactionDAL) UpdateTransfer(transferID string, updateParam bson.D) error {
 	result, err := t.TransferCollection.UpdateByID(context.TODO(), transferID, updateParam)
 	if err != nil {
@@ -145,8 +176,8 @@ func (t TransactionDAL) UpdateWithdrawal(withdrawalID string, updateParam bson.D
 	return nil
 }
 
-func (t TransactionDAL) UpdateDeposit(depositID string, updatePram bson.D) error {
-	result, err := t.DepositCollection.UpdateByID(context.TODO(), depositID, updatePram)
+func (t TransactionDAL) UpdateDeposit(depositID string, updateParam bson.D) error {
+	result, err := t.DepositCollection.UpdateByID(context.TODO(), depositID, updateParam)
 	if err != nil {
 		logrus.Fatalf("[Mongo]: error updating deposit %s: %s", depositID, err.Error())
 		return err
@@ -155,6 +186,21 @@ func (t TransactionDAL) UpdateDeposit(depositID string, updatePram bson.D) error
 	if result.MatchedCount == 0 {
 		logrus.Fatalf("[Mongo]: error updating deposit %s : user record not found", depositID)
 		return errors.New("deposit record not found")
+	}
+
+	return nil
+}
+
+func (t TransactionDAL) UpdateExchange(exchangeID string, updateParam bson.D) error {
+	result, err := t.ExchangeCollection.UpdateByID(context.TODO(), exchangeID, updateParam)
+	if err != nil {
+		logrus.Fatalf("[Mongo]: error updating exchange %s: %s", exchangeID, err.Error())
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		logrus.Fatalf("[Mongo]: error updating exchange %s : user record not found", exchangeID)
+		return errors.New("exchange record not found")
 	}
 
 	return nil

@@ -43,6 +43,7 @@ type Deposit struct {
 
 type Exchange struct {
 	ID                       string        `bson:"_id" json:"id"`
+	User                     *User         `bson:"user" json:"user"`
 	BaseCurrency             string        `bson:"base_currency" json:"base_currency"`
 	BaseAmount               float32       `bson:"base_amount" json:"base_amount"`
 	ExchangeCurrency         string        `bson:"exchange_currency" json:"exchange_currency"`
