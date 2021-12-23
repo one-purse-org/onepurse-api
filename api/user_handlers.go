@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"github.com/aws/smithy-go"
 	"github.com/go-chi/chi"
@@ -9,7 +10,9 @@ import (
 	"github.com/isongjosiah/work/onepurse-api/tracing"
 	"github.com/lucsky/cuid"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"strings"
 	"time"
@@ -387,7 +390,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		}
 
 		transfer.UpdatedAt = time.Now()
-		err = a.Deps.DAL.TransactionDAL.UpdateTransfer(transactionId, doc)
+		err = a.Deps.DAL.TransactionDAL.UpdateTransfer(context.TODO(), transactionId, doc)
 		if err != nil {
 			return RespondWithError(err, "unable to update transfer information", http.StatusInternalServerError, &tracingContext)
 		}
@@ -570,23 +573,18 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 }
 
 func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	ctx := context.Background()
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
 	transactionId := chi.URLParam(r, "transactionID")
 	transactionType := r.URL.Query().Get("transaction-type")
-	//baseCurrency := r.URL.Query().Get("base-currency")
-	//bAmount := r.URL.Query().Get("base-amount")
-	//amount, err := strconv.ParseFloat(bAmount, 32)
-	//if err != nil {
-	//	return RespondWithError(err, "unable to parse base amount", http.StatusBadRequest, &tracingContext)
-	//}
-	//baseAmount := float32(amount)
-	//
-	//if transactionType == "" {
-	//	return RespondWithError(nil, "transaction type is required", http.StatusBadRequest, &tracingContext)
-	//}
-	//if baseCurrency == "" || baseAmount == 0 {
-	//	return RespondWithError(nil, "transaction base currency is required", http.StatusBadRequest, &tracingContext)
-	//}
+
+	// start a transaction session
+	ses, err := a.Deps.DAL.Client.StartSession()
+	if err != nil {
+		logrus.Fatalf("[Mongo]: unable to create a session: %s", err.Error())
+		return RespondWithError(nil, "Something went wrong. Please Try again", http.StatusInternalServerError, &tracingContext)
+	}
+	defer ses.EndSession(ctx)
 
 	switch transactionType {
 	case "transfer":
@@ -597,12 +595,28 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 		query := bson.D{{"$gte", bson.D{{
 			fmt.Sprintf("wallet.available_balance"), transfer.BaseAmount}}},
 			{"wallet.currency", transfer.BaseCurrency}}
-		agent, err := a.Deps.DAL.AgentDAL.FindOne(query)
+		result, err := ses.WithTransaction(ctx, func(sesCtx mongo.SessionContext) (interface{}, error) {
+			agent, err := a.Deps.DAL.AgentDAL.FindOne(sesCtx, query)
+			if err != nil {
+				return nil, err
+			}
+			err = a.Deps.DAL.AgentDAL.Update(sesCtx, agent.ID, bson.D{{"$inc", bson.D{
+				{"wallet.available_balance", -transfer.BaseAmount},
+				{"wallet.pending_balance", transfer.BaseAmount}}}})
+			if err != nil {
+				return nil, err
+			}
+			err = a.Deps.DAL.TransactionDAL.UpdateTransfer(sesCtx, transactionId, bson.D{{"agent_account", agent}})
+			if err != nil {
+				return nil, err
+			}
+			return agent, nil
+		})
 		if err != nil {
 			return RespondWithError(err, "unable to find an agent for your transaction right now", http.StatusInternalServerError, &tracingContext)
 		}
 		return &ServerResponse{
-			Payload: agent,
+			Payload: result,
 		}
 
 	case "exchange":
@@ -610,15 +624,32 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 		if err != nil {
 			return RespondWithError(err, "could not fetch exchange information", http.StatusInternalServerError, &tracingContext)
 		}
-		query := bson.D{{"$gte", bson.D{{
-			fmt.Sprintf("wallet.available_balance"), exchange.BaseAmount}}},
-			{"wallet.currency", exchange.BaseCurrency}}
-		agent, err := a.Deps.DAL.AgentDAL.FindOne(query)
-		if err != nil {
-			return RespondWithError(err, "unable to find an agent for your transaction right now", http.StatusInternalServerError, &tracingContext)
-		}
-		return &ServerResponse{
-			Payload: agent,
+
+		if exchange.BaseCurrency == "USD" {
+			query := bson.D{{"$gte", bson.D{{
+				"wallet.USD.available_balance", exchange.BaseAmount}}}}
+
+			// start transaction
+
+			user, err := a.Deps.DAL.UserDAL.FindOne(context.TODO(), query)
+			if err != nil {
+				return RespondWithError(err, "unable to find user for your transaction now", http.StatusInternalServerError, &tracingContext)
+			}
+			return &ServerResponse{
+				Payload: user,
+			}
+		} else {
+			query := bson.D{{"$gte", bson.D{{
+				fmt.Sprintf("wallet.available_balance"), exchange.BaseAmount}}},
+				{"wallet.currency", exchange.BaseCurrency}}
+
+			agent, err := a.Deps.DAL.AgentDAL.FindOne(context.TODO(), query)
+			if err != nil {
+				return RespondWithError(err, "unable to find an agent for your transaction right now", http.StatusInternalServerError, &tracingContext)
+			}
+			return &ServerResponse{
+				Payload: agent,
+			}
 		}
 
 	case "deposit":
@@ -629,7 +660,7 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 		query := bson.D{{"$gte", bson.D{{
 			fmt.Sprintf("wallet.available_balance"), deposit.BaseAmount}}},
 			{"wallet.currency", deposit.BaseCurrency}}
-		agent, err := a.Deps.DAL.AgentDAL.FindOne(query)
+		agent, err := a.Deps.DAL.AgentDAL.FindOne(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to find an agent for your transaction right now", http.StatusInternalServerError, &tracingContext)
 		}

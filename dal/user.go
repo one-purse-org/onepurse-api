@@ -14,6 +14,7 @@ type IUserDAL interface {
 	Add(user *model.User) error
 	FindByID(userID string) (*model.User, error)
 	FindAll() (*[]model.User, error)
+	FindOne(ctx context.Context, query bson.D) (*model.User, error)
 	FindByUsername(username string) (*model.User, error)
 	UpdateUser(userID string, updateParam bson.D) error
 	DeleteUser(userID string) error
@@ -74,6 +75,23 @@ func (u UserDAL) FindAll() (*[]model.User, error) {
 	}
 
 	return &users, nil
+}
+
+func (u UserDAL) FindOne(ctx context.Context, query bson.D) (*model.User, error) {
+	var user *model.User
+	if ctx == nil {
+		ctx = context.TODO()
+	}
+	err := u.Collection.FindOne(ctx, query).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			findErr := fmt.Sprintf("no user matches the query")
+			return nil, errors.New(findErr)
+		} else {
+			return nil, err
+		}
+	}
+	return user, nil
 }
 
 func (u UserDAL) FindByUsername(username string) (*model.User, error) {

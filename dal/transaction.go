@@ -23,7 +23,7 @@ type ITransactionDAL interface {
 	GetDepositByID(depositID string) (*model.Deposit, error)
 	GetExchangeByID(exchangeID string) (*model.Exchange, error)
 
-	UpdateTransfer(transferID string, updateParam bson.D) error
+	UpdateTransfer(ctx context.Context, transferID string, updateParam bson.D) error
 	UpdateWithdrawal(withdrawalID string, updateParam bson.D) error
 	UpdateDeposit(depositID string, updateParam bson.D) error
 	UpdateExchange(exchangeID string, updateParam bson.D) error
@@ -214,8 +214,8 @@ func (t TransactionDAL) FetchExchanges(query bson.D) (*[]model.Exchange, error) 
 	return &exchanges, nil
 }
 
-func (t TransactionDAL) UpdateTransfer(transferID string, updateParam bson.D) error {
-	result, err := t.TransferCollection.UpdateByID(context.TODO(), transferID, updateParam)
+func (t TransactionDAL) UpdateTransfer(ctx context.Context, transferID string, updateParam bson.D) error {
+	result, err := t.TransferCollection.UpdateByID(ctx, transferID, updateParam)
 	if err != nil {
 		logrus.Fatalf("[Mongo]: error updating transfer %s: %s", transferID, err.Error())
 		return err
