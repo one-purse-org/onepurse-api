@@ -27,10 +27,11 @@ type User struct {
 }
 
 type UserWallet struct {
-	Currency         string  `bson:"currency" json:"currency"`                   // NGN, USD BSD
-	AvailableBalance float32 `bson:"available_balance" json:"available_balance"` // Amount that can be withdrawn
-	PendingBalance   float32 `bson:"pending_balance" json:"pending_balance"`     // Amount tied up in transactions
-	TotalVolume      float32 `bson:"total_volume" json:"total_volume"`           // Total Amount transacted with this wallet. Might not be necessary
+	Currency         string    `bson:"currency" json:"currency"`                   // NGN, USD BSD
+	AvailableBalance float32   `bson:"available_balance" json:"available_balance"` // BaseAmount that can be withdrawn
+	PendingBalance   float32   `bson:"pending_balance" json:"pending_balance"`     // BaseAmount tied up in transactions
+	TotalVolume      float32   `bson:"total_volume" json:"total_volume"`           // Total BaseAmount transacted with this wallet. Might not be necessary
+	CreatedAt        time.Time `bson:"created_at" json:"created_at"`               // Date the wallet was created
 }
 type PreferredCurrency struct {
 	Label string `bson:"slug" json:"label"`

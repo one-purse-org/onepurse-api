@@ -3,13 +3,13 @@ package model
 import "time"
 
 type Withdrawal struct {
-	ID          string       `bson:"_id" json:"id"`
-	Amount      float32      `bson:"amount" json:"amount"`
-	Currency    string       `bson:"currency" json:"currency"` // USD, NGN, BS
-	UserAccount *UserAccount `bson:"user_account" json:"user_account"`
-	Status      string       `bson:"status" json:"status"`
-	CreatedAt   time.Time    `bson:"created_at" json:"created_at"`
-	UpdatedAt   time.Time    `bson:"updated_at" json:"updated_at"`
+	ID           string       `bson:"_id" json:"id"`
+	BaseAmount   float32      `bson:"amount" json:"amount"`
+	BaseCurrency string       `bson:"currency" json:"currency"` // USD, NGN, BS
+	UserAccount  *UserAccount `bson:"user_account" json:"user_account"`
+	Status       string       `bson:"status" json:"status"`
+	CreatedAt    time.Time    `bson:"created_at" json:"created_at"`
+	UpdatedAt    time.Time    `bson:"updated_at" json:"updated_at"`
 }
 
 type Transfer struct {
@@ -31,8 +31,8 @@ type Transfer struct {
 type Deposit struct {
 	ID             string        `bson:"_id" json:"id"`
 	User           *User         `bson:"user" json:"user"`
-	Currency       string        `bson:"currency" json:"currency"`
-	Amount         float32       `bson:"amount" json:"amount"`
+	BaseCurrency   string        `bson:"base_currency" json:"base_currency"`
+	BaseAmount     float32       `bson:"amount" json:"amount"`
 	PaymentChannel string        `bson:"payment_channel" json:"payment_channel"`
 	UserReceipt    string        `bson:"user_receipt" json:"user_receipt"`
 	AgentAccount   *AgentAccount `bson:"agent_account" json:"agent_account"`

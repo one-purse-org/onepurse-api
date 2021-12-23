@@ -57,7 +57,7 @@ func (u UserDAL) FindByID(userID string) (*model.User, error) {
 }
 
 func (u UserDAL) FindAll() (*[]model.User, error) {
-	var user *[]model.User
+	var users []model.User
 
 	cursor, err := u.Collection.Find(context.TODO(), bson.D{})
 	if err != nil {
@@ -68,12 +68,12 @@ func (u UserDAL) FindAll() (*[]model.User, error) {
 		return nil, err
 	}
 
-	if err = cursor.All(context.TODO(), &user); err != nil {
-		logrus.Fatalf("[Mongo]: error parsing mongo document to user model : %s", err.Error())
+	if err = cursor.All(context.TODO(), &users); err != nil {
+		logrus.Fatalf("[Mongo]: error parsing mongo document to users model : %s", err.Error())
 		return nil, err
 	}
 
-	return user, nil
+	return &users, nil
 }
 
 func (u UserDAL) FindByUsername(username string) (*model.User, error) {
@@ -81,8 +81,8 @@ func (u UserDAL) FindByUsername(username string) (*model.User, error) {
 
 	err := u.Collection.FindOne(context.TODO(), bson.M{
 		"$or": []bson.M{
-			bson.M{"user_name": username},
-			bson.M{"email": username},
+			{"user_name": username},
+			{"email": username},
 		},
 	}).Decode(&user)
 

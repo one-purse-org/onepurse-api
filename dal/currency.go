@@ -30,7 +30,7 @@ func (c CurrencyDAL) Add(currency *model.Currency) error {
 	_, err := c.Collection.InsertOne(context.TODO(), currency)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			return errors.New("Currency already exists")
+			return errors.New("BaseCurrency already exists")
 		} else {
 			return err
 		}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"github.com/aws/smithy-go"
 	"github.com/go-chi/chi"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
@@ -28,7 +29,11 @@ func (a *API) UserRoutes() http.Handler {
 	router.Method("POST", "/{userID}/transaction", Handler(a.createTransaction))
 	router.Method("PUT", "/transaction/{transactionID}/", Handler(a.updateTransaction))
 	router.Method("GET", "/{userID}/transaction", Handler(a.getTransaction))
+	router.Method("GET", "/transaction/{transactionID}/get_agent", Handler(a.getAgentForTransaction))
 
+	// Wallet Routes
+	router.Method("POST", "/{userID}/wallet", Handler(a.createWallet))
+	router.Method("GET", "/{userID}/wallet", Handler(a.getWalletTransaction))
 	return router
 }
 
@@ -218,9 +223,6 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		if err := decodeJSONBody(&tracingContext, r.Body, &transfer); err != nil {
 			return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
 		}
-		if transfer.AgentAccount == nil {
-			return RespondWithError(nil, "agent_account is required", http.StatusBadRequest, &tracingContext)
-		}
 		if transfer.BaseCurrency == "" || transfer.ConvCurrency == "" {
 			return RespondWithError(nil, "base and conversion currency are required", http.StatusBadRequest, &tracingContext)
 		}
@@ -255,17 +257,17 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		if err := decodeJSONBody(&tracingContext, r.Body, &withdrawal); err != nil {
 			return RespondWithError(nil, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
 		}
-		if withdrawal.Currency == "" {
+		if withdrawal.BaseCurrency == "" {
 			return RespondWithError(nil, "withdrawal currency is required", http.StatusBadRequest, &tracingContext)
 		}
-		if withdrawal.Amount == 0 {
+		if withdrawal.BaseAmount == 0 {
 			return RespondWithError(nil, "Withdrawal amount cannot equal 0", http.StatusBadRequest, &tracingContext)
 		}
 		if withdrawal.UserAccount == nil {
 			return RespondWithError(nil, "Destination account is required", http.StatusBadRequest, &tracingContext)
 		}
 
-		pass := helpers.DoSufficientFundsCheck(user, withdrawal.Amount, withdrawal.Currency)
+		pass := helpers.DoSufficientFundsCheck(user, withdrawal.BaseAmount, withdrawal.BaseCurrency)
 		if !pass {
 			return RespondWithError(nil, "Insufficient funds to withdraw from", http.StatusBadRequest, &tracingContext)
 		}
@@ -289,17 +291,14 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		if err := decodeJSONBody(&tracingContext, r.Body, &deposit); err != nil {
 			return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
 		}
-		if deposit.Currency == "" {
+		if deposit.BaseCurrency == "" {
 			return RespondWithError(nil, "deposit currency is required", http.StatusBadRequest, &tracingContext)
 		}
-		if deposit.Amount == 0 {
+		if deposit.BaseAmount == 0 {
 			return RespondWithError(nil, "deposit amount is required", http.StatusBadRequest, &tracingContext)
 		}
 		if deposit.PaymentChannel == "" {
 			return RespondWithError(nil, "payment channel is required", http.StatusBadRequest, &tracingContext)
-		}
-		if deposit.AgentAccount == nil {
-			return RespondWithError(nil, "agent account used is required", http.StatusBadRequest, &tracingContext)
 		}
 		deposit.Status = "created"
 		deposit.ID = cuid.New()
@@ -503,27 +502,24 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
 	transactionType := r.URL.Query().Get("transaction-type")
 	userId := chi.URLParam(r, "userID")
-	user, err := a.Deps.DAL.UserDAL.FindByID(userId)
-	if err != nil {
-		return RespondWithError(err, "unable to get user information", http.StatusInternalServerError, &tracingContext)
-	}
+	query := bson.D{{"user._id", userId}}
 
 	switch transactionType {
 	case "all":
 		var response map[string]interface{}
-		transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(user.ID)
+		transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
 		}
-		withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(user.ID)
+		withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch withdraws", http.StatusInternalServerError, &tracingContext)
 		}
-		deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(user.ID)
+		deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch deposits", http.StatusInternalServerError, &tracingContext)
 		}
-		exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(user.ID)
+		exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
 		}
@@ -537,7 +533,7 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 			Payload: response,
 		}
 	case "transfers":
-		transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(user.ID)
+		transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
 		}
@@ -545,7 +541,7 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 			Payload: transfers,
 		}
 	case "withdraws":
-		withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(user.ID)
+		withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch withdraws", http.StatusInternalServerError, &tracingContext)
 		}
@@ -553,7 +549,7 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 			Payload: withdraws,
 		}
 	case "deposit":
-		deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(user.ID)
+		deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch deposits", http.StatusInternalServerError, &tracingContext)
 		}
@@ -561,7 +557,7 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 			Payload: deposits,
 		}
 	case "exchange":
-		exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(user.ID)
+		exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
 		}
@@ -571,4 +567,150 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 	default:
 		return RespondWithError(nil, "This transaction type is not supported", http.StatusInternalServerError, &tracingContext)
 	}
+}
+
+func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	transactionId := chi.URLParam(r, "transactionID")
+	transactionType := r.URL.Query().Get("transaction-type")
+	//baseCurrency := r.URL.Query().Get("base-currency")
+	//bAmount := r.URL.Query().Get("base-amount")
+	//amount, err := strconv.ParseFloat(bAmount, 32)
+	//if err != nil {
+	//	return RespondWithError(err, "unable to parse base amount", http.StatusBadRequest, &tracingContext)
+	//}
+	//baseAmount := float32(amount)
+	//
+	//if transactionType == "" {
+	//	return RespondWithError(nil, "transaction type is required", http.StatusBadRequest, &tracingContext)
+	//}
+	//if baseCurrency == "" || baseAmount == 0 {
+	//	return RespondWithError(nil, "transaction base currency is required", http.StatusBadRequest, &tracingContext)
+	//}
+
+	switch transactionType {
+	case "transfer":
+		transfer, err := a.Deps.DAL.TransactionDAL.GetTransferByID(transactionId)
+		if err != nil {
+			return RespondWithError(err, "could not fetch exchange information", http.StatusInternalServerError, &tracingContext)
+		}
+		query := bson.D{{"$gte", bson.D{{
+			fmt.Sprintf("wallet.available_balance"), transfer.BaseAmount}}},
+			{"wallet.currency", transfer.BaseCurrency}}
+		agent, err := a.Deps.DAL.AgentDAL.FindOne(query)
+		if err != nil {
+			return RespondWithError(err, "unable to find an agent for your transaction right now", http.StatusInternalServerError, &tracingContext)
+		}
+		return &ServerResponse{
+			Payload: agent,
+		}
+
+	case "exchange":
+		exchange, err := a.Deps.DAL.TransactionDAL.GetExchangeByID(transactionId)
+		if err != nil {
+			return RespondWithError(err, "could not fetch exchange information", http.StatusInternalServerError, &tracingContext)
+		}
+		query := bson.D{{"$gte", bson.D{{
+			fmt.Sprintf("wallet.available_balance"), exchange.BaseAmount}}},
+			{"wallet.currency", exchange.BaseCurrency}}
+		agent, err := a.Deps.DAL.AgentDAL.FindOne(query)
+		if err != nil {
+			return RespondWithError(err, "unable to find an agent for your transaction right now", http.StatusInternalServerError, &tracingContext)
+		}
+		return &ServerResponse{
+			Payload: agent,
+		}
+
+	case "deposit":
+		deposit, err := a.Deps.DAL.TransactionDAL.GetDepositByID(transactionId)
+		if err != nil {
+			return RespondWithError(err, "could not fetch deposit information", http.StatusInternalServerError, &tracingContext)
+		}
+		query := bson.D{{"$gte", bson.D{{
+			fmt.Sprintf("wallet.available_balance"), deposit.BaseAmount}}},
+			{"wallet.currency", deposit.BaseCurrency}}
+		agent, err := a.Deps.DAL.AgentDAL.FindOne(query)
+		if err != nil {
+			return RespondWithError(err, "unable to find an agent for your transaction right now", http.StatusInternalServerError, &tracingContext)
+		}
+		return &ServerResponse{
+			Payload: agent,
+		}
+	}
+
+	return &ServerResponse{
+		Payload: nil,
+	}
+}
+
+// Wallet
+
+func (a *API) createWallet(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	walletType := r.URL.Query().Get("wallet-type")
+	userId := chi.URLParam(r, "userID")
+
+	if walletType == "" {
+		return RespondWithError(nil, "wallet type is required", http.StatusBadRequest, &tracingContext)
+	}
+
+	wallet := &model.UserWallet{
+		Currency:         walletType,
+		AvailableBalance: 0,
+		PendingBalance:   0,
+		TotalVolume:      0,
+		CreatedAt:        time.Now(),
+	}
+	doc, err := helpers.MarshalStructToBSONDoc(wallet)
+	if err != nil {
+		return RespondWithError(err, "unable to marshall to mongo document", http.StatusInternalServerError, &tracingContext)
+	}
+	err = a.Deps.DAL.UserDAL.UpdateUser(userId, bson.D{{"$set", bson.D{{
+		fmt.Sprintf("wallet.%s", walletType), doc}}}})
+	if err != nil {
+		return RespondWithError(err, "unable to create wallet", http.StatusInternalServerError, &tracingContext)
+	}
+
+	response := map[string]interface{}{
+		"message": fmt.Sprintf("successfully created %s wallet", walletType),
+	}
+
+	return &ServerResponse{
+		Payload: response,
+	}
+}
+
+func (a *API) getWalletTransaction(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	walletType := r.URL.Query().Get("wallet-type")
+	userId := chi.URLParam(r, "userID")
+	var query = bson.D{{"base_currency", walletType}, {"user_id", userId}}
+
+	var response map[string]interface{}
+	transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(query)
+	if err != nil {
+		return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
+	}
+	withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(query)
+	if err != nil {
+		return RespondWithError(err, "unable to fetch withdraws", http.StatusInternalServerError, &tracingContext)
+	}
+	deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(query)
+	if err != nil {
+		return RespondWithError(err, "unable to fetch deposits", http.StatusInternalServerError, &tracingContext)
+	}
+	exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(query)
+	if err != nil {
+		return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
+	}
+
+	response["transfer"] = transfers
+	response["withdraws"] = withdraws
+	response["deposits"] = deposits
+	response["exchanges"] = exchanges
+
+	return &ServerResponse{
+		Payload: response,
+	}
+
 }

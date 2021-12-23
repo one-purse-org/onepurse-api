@@ -28,10 +28,10 @@ type ITransactionDAL interface {
 	UpdateDeposit(depositID string, updateParam bson.D) error
 	UpdateExchange(exchangeID string, updateParam bson.D) error
 
-	FetchTransfers(userID string) (*[]model.Transfer, error)
-	FetchWithdrawals(userID string) (*[]model.Withdrawal, error)
-	FetchDeposits(userID string) (*[]model.Deposit, error)
-	FetchExchanges(userID string) (*[]model.Exchange, error)
+	FetchTransfers(query bson.D) (*[]model.Transfer, error)
+	FetchWithdrawals(query bson.D) (*[]model.Withdrawal, error)
+	FetchDeposits(query bson.D) (*[]model.Deposit, error)
+	FetchExchanges(query bson.D) (*[]model.Exchange, error)
 
 	CheckTimeLimit() error
 }
@@ -154,6 +154,66 @@ func (t TransactionDAL) GetExchangeByID(exchangeID string) (*model.Exchange, err
 	return exchange, nil
 }
 
+func (t TransactionDAL) FetchTransfers(query bson.D) (*[]model.Transfer, error) {
+	var transfers []model.Transfer
+
+	cursor, err := t.TransferCollection.Find(context.TODO(), query)
+	if err != nil {
+		log.Fatalf("[Mongo]: error fetching transfers: %s", err.Error())
+		return nil, err
+	}
+	if err = cursor.All(context.TODO(), &transfers); err != nil {
+		log.Fatalf("[Mongo]: error decoding transfer results: %s", err.Error())
+		return nil, err
+	}
+	return &transfers, nil
+}
+
+func (t TransactionDAL) FetchDeposits(query bson.D) (*[]model.Deposit, error) {
+	var deposits []model.Deposit
+
+	cursor, err := t.DepositCollection.Find(context.TODO(), query)
+	if err != nil {
+		log.Fatalf("[Mongo]: error decoding deposit results: %s", err.Error())
+		return nil, err
+	}
+	if err = cursor.All(context.TODO(), &deposits); err != nil {
+		log.Fatalf("[Mongo]: error decoding deposit results: %s", err.Error())
+		return nil, err
+	}
+	return &deposits, nil
+}
+
+func (t TransactionDAL) FetchWithdrawals(query bson.D) (*[]model.Withdrawal, error) {
+	var withdrawals []model.Withdrawal
+
+	cursor, err := t.WithdrawalCollection.Find(context.TODO(), query)
+	if err != nil {
+		log.Fatalf("[Mongo]: error fetching withdrawals: %s", err.Error())
+		return nil, err
+	}
+	if err = cursor.All(context.TODO(), &withdrawals); err != nil {
+		log.Fatalf("[Mongo]: error decoding withdrawal results: %s", err.Error())
+		return nil, err
+	}
+	return &withdrawals, err
+}
+
+func (t TransactionDAL) FetchExchanges(query bson.D) (*[]model.Exchange, error) {
+	var exchanges []model.Exchange
+
+	cursor, err := t.ExchangeCollection.Find(context.TODO(), query)
+	if err != nil {
+		log.Fatalf("[Mongo]: error fetching exchanges: %s", err.Error())
+		return nil, err
+	}
+	if err = cursor.All(context.TODO(), &exchanges); err != nil {
+		log.Fatalf("[Mongo]: error decoding exchange results: %s", err.Error())
+		return nil, err
+	}
+	return &exchanges, nil
+}
+
 func (t TransactionDAL) UpdateTransfer(transferID string, updateParam bson.D) error {
 	result, err := t.TransferCollection.UpdateByID(context.TODO(), transferID, updateParam)
 	if err != nil {
@@ -212,96 +272,6 @@ func (t TransactionDAL) UpdateExchange(exchangeID string, updateParam bson.D) er
 	return nil
 }
 
-func (t TransactionDAL) FetchTransfers(userID string) (*[]model.Transfer, error) {
-	var transfers []model.Transfer
-	var cursor *mongo.Cursor
-	var err error
-	if userID != "" {
-		cursor, err = t.TransferCollection.Find(context.TODO(), bson.D{{"user._id", userID}})
-	} else {
-		cursor, err = t.TransferCollection.Find(context.TODO(), bson.D{})
-	}
-
-	if err != nil {
-		log.Fatalf("[Mongo]: error fetching transfers : %s", err.Error())
-		return nil, err
-	}
-
-	if err = cursor.All(context.TODO(), &transfers); err != nil {
-		log.Fatalf("[Mongo]: error decoding transfers result: %s", err.Error())
-		return nil, err
-	}
-	return &transfers, nil
-}
-
-func (t TransactionDAL) FetchDeposits(userID string) (*[]model.Deposit, error) {
-	var deposits []model.Deposit
-	var cursor *mongo.Cursor
-	var err error
-
-	if userID != "" {
-		cursor, err = t.DepositCollection.Find(context.TODO(), bson.D{{"user._id", userID}})
-	} else {
-		cursor, err = t.DepositCollection.Find(context.TODO(), bson.D{})
-	}
-
-	if err != nil {
-		log.Fatalf("[Mongo]: error fetching deposits: %s", err.Error())
-		return nil, err
-	}
-	if err = cursor.All(context.TODO(), &deposits); err != nil {
-		log.Fatalf("[Mongo]: error decoding deposit results: %s", err.Error())
-		return nil, err
-	}
-	return &deposits, nil
-}
-
-func (t TransactionDAL) FetchWithdrawals(userID string) (*[]model.Withdrawal, error) {
-	var withdrawal []model.Withdrawal
-	var cursor *mongo.Cursor
-	var err error
-
-	if userID != "" {
-		cursor, err = t.WithdrawalCollection.Find(context.TODO(), bson.D{{"user._id", userID}})
-	} else {
-		cursor, err = t.WithdrawalCollection.Find(context.TODO(), bson.D{})
-	}
-
-	if err != nil {
-		log.Fatalf("[Mongo]: error fetching withdrawals : %s", err.Error())
-		return nil, err
-	}
-	if err = cursor.All(context.TODO(), &withdrawal); err != nil {
-		log.Fatalf("[Mongo]: error decoding withdrawal result: %s", err.Error())
-		return nil, err
-	}
-	return &withdrawal, nil
-}
-
-func (t TransactionDAL) FetchExchanges(userID string) (*[]model.Exchange, error) {
-	var exchange []model.Exchange
-	var cursor *mongo.Cursor
-	var err error
-
-	if userID != "" {
-		cursor, err = t.ExchangeCollection.Find(context.TODO(), bson.D{{"user._id", userID}})
-
-	} else {
-		cursor, err = t.ExchangeCollection.Find(context.TODO(), bson.D{})
-
-	}
-
-	if err != nil {
-		log.Fatalf("[Mongo]: error fetching exchanges : %s", err.Error())
-		return nil, err
-	}
-	if err = cursor.All(context.TODO(), &exchange); err != nil {
-		log.Fatalf("[Mongo]: error decoding exchange result: %s", err.Error())
-		return nil, err
-	}
-	return &exchange, nil
-}
-
 func (t TransactionDAL) CheckTimeLimit() error {
 	fmt.Println("here one")
 	logrus.Info("Running Transaction Time Limit Cron")
@@ -324,6 +294,5 @@ func (t TransactionDAL) CheckTimeLimit() error {
 		}
 	}
 	logrus.Info("Completed Transaction Time Limit Cron")
-	fmt.Println("done")
 	return nil
 }

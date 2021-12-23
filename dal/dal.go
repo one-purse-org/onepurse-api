@@ -16,6 +16,7 @@ type DAL struct {
 	UserDAL        IUserDAL
 	CurrencyDAL    ICurrencyDAL
 	TransactionDAL ITransactionDAL
+	AgentDAL       IAgentDAL
 }
 
 func (d *DAL) setupDALObjects(cfg *config.Config) error {
@@ -38,6 +39,7 @@ func (d *DAL) setupDALObjects(cfg *config.Config) error {
 	d.UserDAL = NewUserDAL(d.DB)
 	d.CurrencyDAL = NewCurrencyDAL(d.DB)
 	d.TransactionDAL = NewTransactionDAL(d.DB)
+	d.AgentDAL = NewAgentDAL(d.DB)
 	return nil
 }
 
