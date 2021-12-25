@@ -11,13 +11,13 @@ import (
 )
 
 type IUserDAL interface {
-	Add(user *model.User) error
-	FindByID(userID string) (*model.User, error)
-	FindAll() (*[]model.User, error)
+	Add(ctx context.Context, user *model.User) error
+	FindByID(ctx context.Context, userID string) (*model.User, error)
+	FindAll(ctx context.Context) (*[]model.User, error)
 	FindOne(ctx context.Context, query bson.D) (*model.User, error)
-	FindByUsername(username string) (*model.User, error)
-	UpdateUser(userID string, updateParam bson.D) error
-	DeleteUser(userID string) error
+	FindByUsername(ctx context.Context, username string) (*model.User, error)
+	UpdateUser(ctx context.Context, userID string, updateParam bson.D) error
+	DeleteUser(ctx context.Context, userID string) error
 }
 
 type UserDAL struct {
@@ -32,8 +32,8 @@ func NewUserDAL(db *mongo.Database) *UserDAL {
 	}
 }
 
-func (u UserDAL) Add(user *model.User) error {
-	_, err := u.Collection.InsertOne(context.TODO(), user)
+func (u UserDAL) Add(ctx context.Context, user *model.User) error {
+	_, err := u.Collection.InsertOne(ctx, user)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return errors.New("user record already exists")
@@ -43,9 +43,9 @@ func (u UserDAL) Add(user *model.User) error {
 	return nil
 }
 
-func (u UserDAL) FindByID(userID string) (*model.User, error) {
+func (u UserDAL) FindByID(ctx context.Context, userID string) (*model.User, error) {
 	var user *model.User
-	err := u.Collection.FindOne(context.TODO(), bson.D{{"_id", userID}}).Decode(&user)
+	err := u.Collection.FindOne(ctx, bson.D{{"_id", userID}}).Decode(&user)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -57,10 +57,10 @@ func (u UserDAL) FindByID(userID string) (*model.User, error) {
 	return user, nil
 }
 
-func (u UserDAL) FindAll() (*[]model.User, error) {
+func (u UserDAL) FindAll(ctx context.Context) (*[]model.User, error) {
 	var users []model.User
 
-	cursor, err := u.Collection.Find(context.TODO(), bson.D{})
+	cursor, err := u.Collection.Find(ctx, bson.D{})
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return &[]model.User{}, nil // TODO(josiah): confirm that this logic implements what you have in mind
@@ -69,7 +69,7 @@ func (u UserDAL) FindAll() (*[]model.User, error) {
 		return nil, err
 	}
 
-	if err = cursor.All(context.TODO(), &users); err != nil {
+	if err = cursor.All(ctx, &users); err != nil {
 		logrus.Fatalf("[Mongo]: error parsing mongo document to users model : %s", err.Error())
 		return nil, err
 	}
@@ -94,10 +94,10 @@ func (u UserDAL) FindOne(ctx context.Context, query bson.D) (*model.User, error)
 	return user, nil
 }
 
-func (u UserDAL) FindByUsername(username string) (*model.User, error) {
+func (u UserDAL) FindByUsername(ctx context.Context, username string) (*model.User, error) {
 	var user *model.User
 
-	err := u.Collection.FindOne(context.TODO(), bson.M{
+	err := u.Collection.FindOne(ctx, bson.M{
 		"$or": []bson.M{
 			{"user_name": username},
 			{"email": username},
@@ -115,8 +115,8 @@ func (u UserDAL) FindByUsername(username string) (*model.User, error) {
 	return user, nil
 }
 
-func (u UserDAL) UpdateUser(userID string, updateParam bson.D) error {
-	result, err := u.Collection.UpdateByID(context.TODO(), userID, updateParam)
+func (u UserDAL) UpdateUser(ctx context.Context, userID string, updateParam bson.D) error {
+	result, err := u.Collection.UpdateByID(ctx, userID, updateParam)
 	if err != nil {
 		logrus.Fatalf("[Mongo]: error updating user %s : %s", userID, err.Error())
 		return err
@@ -128,8 +128,8 @@ func (u UserDAL) UpdateUser(userID string, updateParam bson.D) error {
 	return nil
 }
 
-func (u UserDAL) DeleteUser(userID string) error {
-	result, err := u.Collection.DeleteOne(context.TODO(), bson.D{{"_id", userID}})
+func (u UserDAL) DeleteUser(ctx context.Context, userID string) error {
+	result, err := u.Collection.DeleteOne(ctx, bson.D{{"_id", userID}})
 	if err != nil {
 		logrus.Fatalf("error deleting user %s : %s", userID, err)
 		return err

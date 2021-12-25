@@ -25,14 +25,19 @@ func (a *API) UserRoutes() http.Handler {
 	// Profile Routes
 	router.Method("POST", "/change_password", Handler(a.changePassword))
 	router.Method("POST", "/{userID}/create_username", Handler(a.createUserName))
-	router.Method("PATCH", "/{userID}/create_transaction_password", Handler(a.createTransactionPassword))
+	router.Method("PATCH", "/{userID}/transaction_password", Handler(a.TransactionPasswordActions))
 	router.Method("PATCH", "/{userID}/update_kyc_information", Handler(a.updateKYCInformation))
+	router.Method("PATCH", "/{userID}/profile", Handler(a.updateProfile))
 
 	// Transaction Routes
 	router.Method("POST", "/{userID}/transaction", Handler(a.createTransaction))
 	router.Method("PUT", "/transaction/{transactionID}/", Handler(a.updateTransaction))
 	router.Method("GET", "/{userID}/transaction", Handler(a.getTransaction))
 	router.Method("GET", "/transaction/{transactionID}/get_agent", Handler(a.getAgentForTransaction))
+
+	// OTP Token Routes
+	router.Method("GET", "/{userID}/otp", Handler(a.generateOTPToken))
+	router.Method("POST", "/{userID}/otp", Handler(a.validateOTPToken))
 
 	// Wallet Routes
 	router.Method("POST", "/{userID}/wallet", Handler(a.createWallet))
@@ -83,33 +88,86 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) *ServerResp
 	return &ServerResponse{Payload: response}
 }
 
-func (a *API) createTransactionPassword(w http.ResponseWriter, r *http.Request) *ServerResponse {
-	var user model.User
+func (a *API) TransactionPasswordActions(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	userID := chi.URLParam(r, "userID")
+	action := r.URL.Query().Get("action")
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
-
-	if err := decodeJSONBody(&tracingContext, r.Body, &user); err != nil {
-		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
-	}
-
-	if user.TransactionPassword == "" {
-		return RespondWithError(nil, "Transaction password is required", http.StatusBadRequest, &tracingContext)
-	}
-
-	password, err := helpers.HashPassword(user.TransactionPassword)
+	user, err := a.Deps.DAL.UserDAL.FindByID(context.TODO(), userID)
 	if err != nil {
-		return RespondWithError(err, "Failed to hash password", http.StatusInternalServerError, &tracingContext)
-	}
-	err = a.Deps.DAL.UserDAL.UpdateUser(userID, bson.D{{"$set", bson.D{{"transaction_password", password}}}})
-	if err != nil {
-		return RespondWithError(err, "Failed to update transaction password", http.StatusInternalServerError, &tracingContext)
+		return RespondWithError(err, "could not find utemp", http.StatusBadRequest, &tracingContext)
 	}
 
-	response := map[string]interface{}{
-		"message": "transaction password updated",
-	}
+	switch action {
+	case "create":
+		if user.TransactionPassword != "" {
+			return RespondWithError(nil, "user already created a transaction pin", http.StatusForbidden, &tracingContext)
+		}
+		var utemp model.User
+		if err := decodeJSONBody(&tracingContext, r.Body, &utemp); err != nil {
+			return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+		}
 
-	return &ServerResponse{Payload: response}
+		if utemp.TransactionPassword == "" {
+			return RespondWithError(nil, "Transaction password is required", http.StatusBadRequest, &tracingContext)
+		}
+		temp := &model.User{
+			TransactionPassword: utemp.TransactionPassword,
+		}
+		password, err := helpers.HashPassword(temp.TransactionPassword)
+		if err != nil {
+			return RespondWithError(err, "Failed to hash password", http.StatusInternalServerError, &tracingContext)
+		}
+		err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, bson.D{{"$set", bson.D{{"transaction_password", password}}}})
+		if err != nil {
+			return RespondWithError(err, "Failed to update transaction password", http.StatusInternalServerError, &tracingContext)
+		}
+
+		response := map[string]interface{}{
+			"message": "transaction password created successfully",
+		}
+
+		return &ServerResponse{Payload: response}
+
+	case "update":
+		var request model.ChangeTransactionPasswordRequest
+		if err := decodeJSONBody(&tracingContext, r.Body, &tracingContext); err != nil {
+			return RespondWithError(err, "failed to decode request body", http.StatusInternalServerError, &tracingContext)
+		}
+		if request.OTP == "" {
+			return RespondWithError(nil, "otp is required to change transaction password", http.StatusBadRequest, &tracingContext)
+		}
+		if request.ProposedPassword == "" {
+			return RespondWithError(nil, "new password is required", http.StatusBadRequest, &tracingContext)
+		}
+
+		valid := helpers.ValidateOTPCode(userID, request.OTP)
+		if !valid {
+			return RespondWithError(nil, "Invalid Token", http.StatusBadRequest, &tracingContext)
+		}
+		hashPassword, err := helpers.HashPassword(request.ProposedPassword)
+		if err != nil {
+			return RespondWithError(err, "unable to hash password. Please try again", http.StatusInternalServerError, &tracingContext)
+		}
+
+		// update utemp transaction password
+		err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, bson.D{{"$set", bson.D{{
+			"transaction_password", hashPassword,
+		}}}})
+		if err != nil {
+			return RespondWithError(err, "unable to update utemp. Please try again", http.StatusInternalServerError, &tracingContext)
+		}
+
+		response := map[string]interface{}{
+			"message": "token successfully generated",
+		}
+
+		return &ServerResponse{
+			Payload: response,
+		}
+
+	default:
+		return RespondWithWarning(nil, "this transaction action is not supported", http.StatusBadRequest, &tracingContext)
+	}
 }
 
 func (a *API) createUserName(w http.ResponseWriter, r *http.Request) *ServerResponse {
@@ -146,7 +204,7 @@ func (a *API) createUserName(w http.ResponseWriter, r *http.Request) *ServerResp
 		}
 	}
 
-	err = a.Deps.DAL.UserDAL.UpdateUser(userID, bson.D{{"username", param.PreferredUsername}})
+	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, bson.D{{"username", param.PreferredUsername}})
 	if err != nil {
 		return RespondWithError(err, "Failed to update user name", http.StatusInternalServerError, &tracingContext)
 
@@ -165,7 +223,7 @@ func (a *API) updateKYCInformation(w http.ResponseWriter, r *http.Request) *Serv
 	userID := chi.URLParam(r, "userID")
 
 	if err := decodeJSONBody(&tracingContext, r.Body, &user); err != nil {
-		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+		return RespondWithError(err, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
 	}
 
 	if user.Location == "" {
@@ -198,7 +256,7 @@ func (a *API) updateKYCInformation(w http.ResponseWriter, r *http.Request) *Serv
 		return RespondWithError(err, "Failed to marshal to bson document", http.StatusInternalServerError, &tracingContext)
 	}
 
-	err = a.Deps.DAL.UserDAL.UpdateUser(userID, doc)
+	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, doc)
 	if err != nil {
 		return RespondWithError(err, "Failed to update KYC information", http.StatusInternalServerError, &tracingContext)
 	}
@@ -210,13 +268,44 @@ func (a *API) updateKYCInformation(w http.ResponseWriter, r *http.Request) *Serv
 	return &ServerResponse{Payload: response}
 }
 
+func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	var user model.User
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	userID := chi.URLParam(r, "userID")
+
+	if err := decodeJSONBody(&tracingContext, r.Body, &user); err != nil {
+		return RespondWithError(err, "failed to decode request body", http.StatusBadRequest, &tracingContext)
+	}
+	temp := &model.User{
+		UserName:    user.UserName,
+		PhoneNumber: user.PhoneNumber,
+		Email:       user.Email,
+	}
+	doc, err := helpers.MarshalStructToBSONDoc(temp)
+	if err != nil {
+		return RespondWithWarning(err, "unable to marshal to mongo document", http.StatusInternalServerError, &tracingContext)
+	}
+	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, doc)
+	if err != nil {
+		return RespondWithError(err, "failed to update profile", http.StatusInternalServerError, &tracingContext)
+	}
+
+	response := map[string]interface{}{
+		"message": "user profile successfully updated",
+	}
+
+	return &ServerResponse{
+		Payload: response,
+	}
+}
+
 // Transaction
 
 func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
 	transactionType := r.URL.Query().Get("transaction-type")
 	userId := chi.URLParam(r, "userID")
-	user, err := a.Deps.DAL.UserDAL.FindByID(userId)
+	user, err := a.Deps.DAL.UserDAL.FindByID(context.TODO(), userId)
 	if err != nil {
 		return RespondWithError(err, "Unable to get user information", http.StatusInternalServerError, &tracingContext)
 	}
@@ -244,7 +333,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		transfer.CreatedAt = time.Now()
 		transfer.User = user
 
-		err := a.Deps.DAL.TransactionDAL.CreateTransfer(&transfer)
+		err := a.Deps.DAL.TransactionDAL.CreateTransfer(context.TODO(), &transfer)
 		if err != nil {
 			return RespondWithError(err, "Failed to initiate transfer. Please try again", http.StatusInternalServerError, &tracingContext)
 		}
@@ -278,7 +367,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		withdrawal.CreatedAt = time.Now()
 		withdrawal.ID = cuid.New()
 		withdrawal.Status = "created"
-		err := a.Deps.DAL.TransactionDAL.CreateWithdrawal(&withdrawal)
+		err := a.Deps.DAL.TransactionDAL.CreateWithdrawal(context.TODO(), &withdrawal)
 		if err != nil {
 			return RespondWithError(err, "Failed to initiate withdrawal. Please try again", http.StatusBadRequest, &tracingContext)
 		}
@@ -308,7 +397,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		deposit.CreatedAt = time.Now()
 		deposit.User = user
 
-		err := a.Deps.DAL.TransactionDAL.CreateDeposit(&deposit)
+		err := a.Deps.DAL.TransactionDAL.CreateDeposit(context.TODO(), &deposit)
 		if err != nil {
 			return RespondWithError(err, "Failed to initiate deposit, Please try again", http.StatusInternalServerError, &tracingContext)
 		}
@@ -346,7 +435,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		exchange.ID = cuid.New()
 		exchange.Status = "initiated"
 		exchange.User = user
-		err := a.Deps.DAL.TransactionDAL.CreateExchange(&exchange)
+		err := a.Deps.DAL.TransactionDAL.CreateExchange(context.TODO(), &exchange)
 		if err != nil {
 			return RespondWithError(err, "Failed to initiate transaction. Please try again", http.StatusBadRequest, &tracingContext)
 		}
@@ -380,7 +469,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 			return RespondWithError(err, "Failed to marshal to bson document", http.StatusInternalServerError, &tracingContext)
 		}
 
-		tempTransfer, err := a.Deps.DAL.TransactionDAL.GetTransferByID(transactionId)
+		tempTransfer, err := a.Deps.DAL.TransactionDAL.GetTransferByID(context.TODO(), transactionId)
 		if err != nil {
 			return RespondWithError(err, "error fetching transfer information", http.StatusBadRequest, &tracingContext)
 		}
@@ -413,7 +502,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 			return RespondWithError(err, "Failed to marshal to bson document", http.StatusInternalServerError, &tracingContext)
 		}
 
-		tempWithdrawal, err := a.Deps.DAL.TransactionDAL.GetWithdrawalByID(transactionId)
+		tempWithdrawal, err := a.Deps.DAL.TransactionDAL.GetWithdrawalByID(context.TODO(), transactionId)
 		if err != nil {
 			return RespondWithError(err, "error fetching withdrawal information", http.StatusBadRequest, &tracingContext)
 		}
@@ -423,7 +512,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		}
 
 		withdrawal.UpdatedAt = time.Now()
-		err = a.Deps.DAL.TransactionDAL.UpdateWithdrawal(transactionId, doc)
+		err = a.Deps.DAL.TransactionDAL.UpdateWithdrawal(context.TODO(), transactionId, doc)
 		if err != nil {
 			return RespondWithError(err, "unable to update withdrawal information", http.StatusInternalServerError, &tracingContext)
 		}
@@ -445,7 +534,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 			return RespondWithError(err, "Failed to marshal to bson document", http.StatusInternalServerError, &tracingContext)
 		}
 
-		tempDeposit, err := a.Deps.DAL.TransactionDAL.GetDepositByID(transactionId)
+		tempDeposit, err := a.Deps.DAL.TransactionDAL.GetDepositByID(context.TODO(), transactionId)
 		if err != nil {
 			return RespondWithError(err, "error fetching deposit information", http.StatusBadRequest, &tracingContext)
 		}
@@ -454,7 +543,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		}
 
 		deposit.UpdatedAt = time.Now()
-		err = a.Deps.DAL.TransactionDAL.UpdateDeposit(transactionId, doc)
+		err = a.Deps.DAL.TransactionDAL.UpdateDeposit(context.TODO(), transactionId, doc)
 		if err != nil {
 			return RespondWithError(err, "unable to update deposit information", http.StatusInternalServerError, &tracingContext)
 		}
@@ -476,7 +565,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		if err != nil {
 			return RespondWithError(err, "Failed to marshal to bson document", http.StatusInternalServerError, &tracingContext)
 		}
-		tempExchange, err := a.Deps.DAL.TransactionDAL.GetExchangeByID(transactionId)
+		tempExchange, err := a.Deps.DAL.TransactionDAL.GetExchangeByID(context.TODO(), transactionId)
 		if err != nil {
 			return RespondWithError(err, "error fetching exchange information", http.StatusForbidden, &tracingContext)
 		}
@@ -485,7 +574,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		}
 
 		exchange.UpdatedAt = time.Now()
-		err = a.Deps.DAL.TransactionDAL.UpdateExchange(transactionId, doc)
+		err = a.Deps.DAL.TransactionDAL.UpdateExchange(context.TODO(), transactionId, doc)
 		if err != nil {
 			return RespondWithError(err, "unable to update exchange information", http.StatusInternalServerError, &tracingContext)
 		}
@@ -510,19 +599,19 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 	switch transactionType {
 	case "all":
 		var response map[string]interface{}
-		transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(query)
+		transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
 		}
-		withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(query)
+		withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch withdraws", http.StatusInternalServerError, &tracingContext)
 		}
-		deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(query)
+		deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch deposits", http.StatusInternalServerError, &tracingContext)
 		}
-		exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(query)
+		exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
 		}
@@ -536,7 +625,7 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 			Payload: response,
 		}
 	case "transfers":
-		transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(query)
+		transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
 		}
@@ -544,7 +633,7 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 			Payload: transfers,
 		}
 	case "withdraws":
-		withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(query)
+		withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch withdraws", http.StatusInternalServerError, &tracingContext)
 		}
@@ -552,7 +641,7 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 			Payload: withdraws,
 		}
 	case "deposit":
-		deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(query)
+		deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch deposits", http.StatusInternalServerError, &tracingContext)
 		}
@@ -560,7 +649,7 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 			Payload: deposits,
 		}
 	case "exchange":
-		exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(query)
+		exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
 		}
@@ -588,7 +677,7 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 
 	switch transactionType {
 	case "transfer":
-		transfer, err := a.Deps.DAL.TransactionDAL.GetTransferByID(transactionId)
+		transfer, err := a.Deps.DAL.TransactionDAL.GetTransferByID(context.TODO(), transactionId)
 		if err != nil {
 			return RespondWithError(err, "could not fetch exchange information", http.StatusInternalServerError, &tracingContext)
 		}
@@ -620,7 +709,7 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 		}
 
 	case "exchange":
-		exchange, err := a.Deps.DAL.TransactionDAL.GetExchangeByID(transactionId)
+		exchange, err := a.Deps.DAL.TransactionDAL.GetExchangeByID(context.TODO(), transactionId)
 		if err != nil {
 			return RespondWithError(err, "could not fetch exchange information", http.StatusInternalServerError, &tracingContext)
 		}
@@ -653,7 +742,7 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 		}
 
 	case "deposit":
-		deposit, err := a.Deps.DAL.TransactionDAL.GetDepositByID(transactionId)
+		deposit, err := a.Deps.DAL.TransactionDAL.GetDepositByID(context.TODO(), transactionId)
 		if err != nil {
 			return RespondWithError(err, "could not fetch deposit information", http.StatusInternalServerError, &tracingContext)
 		}
@@ -671,6 +760,63 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 
 	return &ServerResponse{
 		Payload: nil,
+	}
+}
+
+// OTP Token Routes
+
+func (a *API) generateOTPToken(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	userID := chi.URLParam(r, "userID")
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	user, err := a.Deps.DAL.UserDAL.FindByID(context.TODO(), userID)
+	if err != nil {
+		return RespondWithError(err, "could not find user", http.StatusBadRequest, &tracingContext)
+	}
+
+	token, err := helpers.CreateOTPCode(userID)
+	if err != nil {
+		return RespondWithError(err, "unable to generate otp token", http.StatusInternalServerError, &tracingContext)
+	}
+	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, bson.D{{"$set", bson.D{{"otp_token", token}}}})
+	if err != nil {
+		return RespondWithError(err, "unable to update user token", http.StatusInternalServerError, &tracingContext)
+	}
+
+	// Send OTP token to user
+	msg := fmt.Sprintf("Here is your OTP for changing your transaction password: %s. It expires in %s", token, time.Now().Add(30*time.Second))
+	err = a.Deps.TWILIO.SendMessage(user.PhoneNumber, msg)
+	if err != nil {
+		return RespondWithError(err, "unable to send otp to user. Please try again", http.StatusInternalServerError, &tracingContext)
+	}
+
+	response := map[string]interface{}{
+		"message": fmt.Sprintf("token sent to %s", user.PhoneNumber),
+	}
+
+	return &ServerResponse{
+		Payload: response,
+	}
+}
+
+func (a *API) validateOTPToken(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	userID := chi.URLParam(r, "userID")
+	passcode := r.URL.Query().Get("passcode")
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	_, err := a.Deps.DAL.UserDAL.FindByID(context.TODO(), userID)
+	if err != nil {
+		return RespondWithError(err, "could not find user", http.StatusBadRequest, &tracingContext)
+	}
+
+	valid := helpers.ValidateOTPCode(userID, passcode)
+	if !valid {
+		return RespondWithError(nil, "invalid otp", http.StatusBadRequest, &tracingContext)
+	}
+
+	response := map[string]interface{}{
+		"message": "token validated successfully",
+	}
+	return &ServerResponse{
+		Payload: response,
 	}
 }
 
@@ -696,7 +842,7 @@ func (a *API) createWallet(w http.ResponseWriter, r *http.Request) *ServerRespon
 	if err != nil {
 		return RespondWithError(err, "unable to marshall to mongo document", http.StatusInternalServerError, &tracingContext)
 	}
-	err = a.Deps.DAL.UserDAL.UpdateUser(userId, bson.D{{"$set", bson.D{{
+	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userId, bson.D{{"$set", bson.D{{
 		fmt.Sprintf("wallet.%s", walletType), doc}}}})
 	if err != nil {
 		return RespondWithError(err, "unable to create wallet", http.StatusInternalServerError, &tracingContext)
@@ -718,19 +864,19 @@ func (a *API) getWalletTransaction(w http.ResponseWriter, r *http.Request) *Serv
 	var query = bson.D{{"base_currency", walletType}, {"user_id", userId}}
 
 	var response map[string]interface{}
-	transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(query)
+	transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(context.TODO(), query)
 	if err != nil {
 		return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
 	}
-	withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(query)
+	withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(context.TODO(), query)
 	if err != nil {
 		return RespondWithError(err, "unable to fetch withdraws", http.StatusInternalServerError, &tracingContext)
 	}
-	deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(query)
+	deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(context.TODO(), query)
 	if err != nil {
 		return RespondWithError(err, "unable to fetch deposits", http.StatusInternalServerError, &tracingContext)
 	}
-	exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(query)
+	exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(context.TODO(), query)
 	if err != nil {
 		return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
 	}

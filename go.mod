@@ -20,7 +20,9 @@ require (
 	github.com/lucsky/cuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/plaid/plaid-go v1.6.0
+	github.com/pquerna/otp v1.3.0
 	github.com/sirupsen/logrus v1.8.1
+	github.com/twilio/twilio-go v0.19.0
 	go.mongodb.org/mongo-driver v1.7.2
 	golang.org/x/crypto v0.0.0-20201217014255-9d1352758620
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect

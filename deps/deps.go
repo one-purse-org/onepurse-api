@@ -10,8 +10,9 @@ import (
 
 type Dependencies struct {
 	// Services
-	AWS   *services.AWS
-	PLAID *services.PLAID
+	AWS    *services.AWS
+	PLAID  *services.PLAID
+	TWILIO *services.Twilio
 
 	// DAL
 	DAL *userdal.DAL
@@ -34,10 +35,16 @@ func New(cfg *config.Config) (*Dependencies, error) {
 		return nil, errors.Wrapf(err, "[PLAID]: unable to set up PLAID service")
 	}
 
+	twilio, err := services.NewTwilioService(cfg)
+	if err != nil {
+		return nil, errors.Wrapf(err, "[TWILIO]: unable to set up TWILIO service")
+	}
+
 	deps := &Dependencies{
-		AWS:   aws,
-		PLAID: plaid,
-		DAL:   dal,
+		AWS:    aws,
+		PLAID:  plaid,
+		DAL:    dal,
+		TWILIO: twilio,
 	}
 
 	return deps, nil

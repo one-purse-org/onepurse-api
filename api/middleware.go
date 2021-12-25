@@ -46,7 +46,7 @@ func Authorization(next http.Handler) http.Handler {
 
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		url := fmt.Sprintf("https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json", cfg.AWSRegion, cfg.CognitoUserPoolID)
-		keyset, err := jwk.Fetch(context.Background(), url)
+		keySet, err := jwk.Fetch(context.Background(), url)
 		if err != nil {
 			logrus.Fatalf("failed to get JWKS from provided resource: %s", err.Error())
 			writeErrorResponse(w, http.StatusUnauthorized, "Not authorized")
@@ -65,7 +65,7 @@ func Authorization(next http.Handler) http.Handler {
 		}
 		_, err = jwt.ParseString(
 			awsJwt,
-			jwt.WithKeySet(keyset),
+			jwt.WithKeySet(keySet),
 			jwt.WithValidate(true),
 		)
 		if err != nil {

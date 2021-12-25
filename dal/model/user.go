@@ -1,11 +1,14 @@
 package model
 
-import "time"
+import (
+	"time"
+)
 
 type User struct {
 	ID                  string                `bson:"_id" json:"id"`
 	FullName            string                `bson:"full_name" json:"full_name"`
 	UserName            string                `bson:"username" json:"username"`
+	PhoneNumber         string                `bson:"phone_number" json:"phone_number"`
 	Email               string                `bson:"email" json:"email"`
 	TransactionPassword string                `bson:"transaction_password" json:"transaction_password"`
 	Wallet              map[string]UserWallet `bson:"wallet" json:"wallet"` // a map of wallet with the keys representing the currency and the value the wallet info for that currency
@@ -73,6 +76,11 @@ type ConfirmForgotPasswordRequest struct {
 	Username         string `json:"username"`
 	Code             string `json:"code"`
 	ProposedPassword string `json:"proposed_password"`
+}
+
+type ChangeTransactionPasswordRequest struct {
+	ProposedPassword string `json:"proposed_password"`
+	OTP              string `json:"otp"`
 }
 
 type ChangePassword struct {

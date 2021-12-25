@@ -46,6 +46,9 @@ type Config struct {
 	PlaidProducts             string `env:"PLAID_PRODUCTS" required:"true"`
 	PlaidCountryCodes         string `env:"PLAID_COUNTRY_CODE" required:"true"`
 	PlaidRedirectUri          string `env:"PLAID_REDIRECT_URI" required:"true"`
+	TwilioAccountSID          string `env:"TWILIO_ACCOUNT_SID" required:"true"`
+	TwilioAuthToken           string `env:"TWILIO_AUTH_TOKEN" required:"true"`
+	TwilioPhoneNumber         string `env:"TWILIO_PHONE_NUMBER" required:"true"`
 	OkraToken                 string `env:"OKRA_TOKEN" required:"true"`
 	MongoURI                  string `env:"MONGO_URI" required:"true"` // TODO: set up a database properly before production deployment
 	Environment               string `env:"ENVIRONMENT" envDefault:"development"`

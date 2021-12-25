@@ -1,9 +1,14 @@
 package helpers
 
 import (
+	"encoding/base32"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/crypto/bcrypt"
+	"time"
 )
 
 func HashPassword(password string) (string, error) {
@@ -24,6 +29,7 @@ func DoSufficientFundsCheck(user *model.User, amount float32, currency string) b
 	return true
 }
 
+//MarshalStructToBSONDoc marshals a struct to a mongo document
 func MarshalStructToBSONDoc(structure interface{}) (bson.D, error) {
 	var doc bson.D
 
@@ -37,4 +43,63 @@ func MarshalStructToBSONDoc(structure interface{}) (bson.D, error) {
 		return nil, err
 	}
 	return doc, nil
+}
+
+func CreateOTP(user *model.User) (*otp.Key, error) {
+	token, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "onepurse",
+		AccountName: "hello@onepurse.co",
+		Period:      300,
+		SecretSize:  0,
+		Secret:      []byte(user.ID),
+		Digits:      0,
+		Algorithm:   0,
+		Rand:        nil,
+	})
+	if err != nil {
+		logrus.Errorf("[OTP]: error generating otp: %s", err.Error())
+		return nil, err
+	}
+	return token, err
+}
+
+func CreateOTPCode(userID string) (string, error) {
+	s := generateSecret(userID)
+
+	opts := totp.ValidateOpts{
+		Period:    30,
+		Skew:      0,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA512,
+	}
+	passcode, err := totp.GenerateCodeCustom(s, time.Now(), opts)
+	if err != nil {
+		logrus.Errorf("[OTP]: error generating otp code: %s", err.Error())
+		return "", err
+	}
+	return passcode, err
+}
+
+func ValidateOTPCode(userID string, passcode string) bool {
+	s := generateSecret(userID)
+
+	opts := totp.ValidateOpts{
+		Period:    30,
+		Skew:      0,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA512,
+	}
+	valid, err := totp.ValidateCustom(passcode, s, time.Now(), opts)
+	if err != nil {
+		logrus.Errorf("[OTP]: unable to validate otp: %s", err.Error())
+		return false
+	}
+
+	return valid
+}
+
+func generateSecret(key string) string {
+	secret := []byte(key)
+	s := base32.StdEncoding.EncodeToString(secret)
+	return s
 }

@@ -12,8 +12,8 @@ import (
 )
 
 type IAgentDAL interface {
-	Add(agent *model.Agent) error
-	FindAll(query bson.D) (*[]model.Agent, error)
+	Add(ctx context.Context, agent *model.Agent) error
+	FindAll(ctx context.Context, query bson.D) (*[]model.Agent, error)
 	FindOne(ctx context.Context, query bson.D) (*model.Agent, error)
 	Update(ctx context.Context, agentID string, updateParam bson.D) error
 }
@@ -30,8 +30,8 @@ func NewAgentDAL(db *mongo.Database) *AgentDAL {
 	}
 }
 
-func (a AgentDAL) Add(agent *model.Agent) error {
-	_, err := a.Collection.InsertOne(context.TODO(), agent)
+func (a AgentDAL) Add(ctx context.Context, agent *model.Agent) error {
+	_, err := a.Collection.InsertOne(ctx, agent)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return errors.New("agent record already exists")
@@ -55,10 +55,10 @@ func (a AgentDAL) FindOne(ctx context.Context, query bson.D) (*model.Agent, erro
 	return &agent, nil
 }
 
-func (a AgentDAL) FindAll(query bson.D) (*[]model.Agent, error) {
+func (a AgentDAL) FindAll(ctx context.Context, query bson.D) (*[]model.Agent, error) {
 	var agents []model.Agent
 
-	cursor, err := a.Collection.Find(context.TODO(), query)
+	cursor, err := a.Collection.Find(ctx, query)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return &[]model.Agent{}, nil
@@ -67,7 +67,7 @@ func (a AgentDAL) FindAll(query bson.D) (*[]model.Agent, error) {
 		return nil, err
 	}
 
-	if err = cursor.All(context.TODO(), &agents); err != nil {
+	if err = cursor.All(ctx, &agents); err != nil {
 		logrus.Fatalf("[Mongo]: error parsing mongo document to agents model: %s", err.Error())
 		return nil, err
 	}

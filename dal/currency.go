@@ -10,8 +10,8 @@ import (
 )
 
 type ICurrencyDAL interface {
-	Add(currency *model.Currency) error
-	FindAll() (*[]model.Currency, error)
+	Add(ctx context.Context, currency *model.Currency) error
+	FindAll(ctx context.Context) (*[]model.Currency, error)
 }
 
 type CurrencyDAL struct {

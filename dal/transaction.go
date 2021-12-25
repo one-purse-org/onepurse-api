@@ -13,25 +13,25 @@ import (
 )
 
 type ITransactionDAL interface {
-	CreateTransfer(transfer *model.Transfer) error
-	CreateWithdrawal(withdrawal *model.Withdrawal) error
-	CreateDeposit(deposit *model.Deposit) error
-	CreateExchange(exchange *model.Exchange) error
+	CreateTransfer(ctx context.Context, transfer *model.Transfer) error
+	CreateWithdrawal(ctx context.Context, withdrawal *model.Withdrawal) error
+	CreateDeposit(ctx context.Context, deposit *model.Deposit) error
+	CreateExchange(ctx context.Context, exchange *model.Exchange) error
 
-	GetTransferByID(transferID string) (*model.Transfer, error)
-	GetWithdrawalByID(withdrawalID string) (*model.Withdrawal, error)
-	GetDepositByID(depositID string) (*model.Deposit, error)
-	GetExchangeByID(exchangeID string) (*model.Exchange, error)
+	GetTransferByID(ctx context.Context, transferID string) (*model.Transfer, error)
+	GetWithdrawalByID(ctx context.Context, withdrawalID string) (*model.Withdrawal, error)
+	GetDepositByID(ctx context.Context, depositID string) (*model.Deposit, error)
+	GetExchangeByID(ctx context.Context, exchangeID string) (*model.Exchange, error)
 
 	UpdateTransfer(ctx context.Context, transferID string, updateParam bson.D) error
-	UpdateWithdrawal(withdrawalID string, updateParam bson.D) error
-	UpdateDeposit(depositID string, updateParam bson.D) error
-	UpdateExchange(exchangeID string, updateParam bson.D) error
+	UpdateWithdrawal(ctx context.Context, withdrawalID string, updateParam bson.D) error
+	UpdateDeposit(ctx context.Context, depositID string, updateParam bson.D) error
+	UpdateExchange(ctx context.Context, exchangeID string, updateParam bson.D) error
 
-	FetchTransfers(query bson.D) (*[]model.Transfer, error)
-	FetchWithdrawals(query bson.D) (*[]model.Withdrawal, error)
-	FetchDeposits(query bson.D) (*[]model.Deposit, error)
-	FetchExchanges(query bson.D) (*[]model.Exchange, error)
+	FetchTransfers(ctx context.Context, query bson.D) (*[]model.Transfer, error)
+	FetchWithdrawals(ctx context.Context, query bson.D) (*[]model.Withdrawal, error)
+	FetchDeposits(ctx context.Context, query bson.D) (*[]model.Deposit, error)
+	FetchExchanges(ctx context.Context, query bson.D) (*[]model.Exchange, error)
 
 	CheckTimeLimit() error
 }
@@ -54,8 +54,8 @@ func NewTransactionDAL(db *mongo.Database) *TransactionDAL {
 	}
 }
 
-func (t TransactionDAL) CreateTransfer(transfer *model.Transfer) error {
-	_, err := t.TransferCollection.InsertOne(context.TODO(), transfer)
+func (t TransactionDAL) CreateTransfer(ctx context.Context, transfer *model.Transfer) error {
+	_, err := t.TransferCollection.InsertOne(ctx, transfer)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return errors.New("Transfer record already exists. You might be repeating a transaction")
@@ -65,8 +65,8 @@ func (t TransactionDAL) CreateTransfer(transfer *model.Transfer) error {
 	return nil
 }
 
-func (t TransactionDAL) CreateWithdrawal(withdrawal *model.Withdrawal) error {
-	_, err := t.WithdrawalCollection.InsertOne(context.TODO(), withdrawal)
+func (t TransactionDAL) CreateWithdrawal(ctx context.Context, withdrawal *model.Withdrawal) error {
+	_, err := t.WithdrawalCollection.InsertOne(ctx, withdrawal)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return errors.New("withdrawal record already exists. You might be repeating a transaction")
@@ -76,8 +76,8 @@ func (t TransactionDAL) CreateWithdrawal(withdrawal *model.Withdrawal) error {
 	return nil
 }
 
-func (t TransactionDAL) CreateDeposit(deposit *model.Deposit) error {
-	_, err := t.DepositCollection.InsertOne(context.TODO(), deposit)
+func (t TransactionDAL) CreateDeposit(ctx context.Context, deposit *model.Deposit) error {
+	_, err := t.DepositCollection.InsertOne(ctx, deposit)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return errors.New("deposit record already exists. You might be repeating a transaction")
@@ -87,8 +87,8 @@ func (t TransactionDAL) CreateDeposit(deposit *model.Deposit) error {
 	return nil
 }
 
-func (t TransactionDAL) CreateExchange(exchange *model.Exchange) error {
-	_, err := t.ExchangeCollection.InsertOne(context.TODO(), exchange)
+func (t TransactionDAL) CreateExchange(ctx context.Context, exchange *model.Exchange) error {
+	_, err := t.ExchangeCollection.InsertOne(ctx, exchange)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return errors.New("exchange record already exists. You might be repeating a transaction")
@@ -98,9 +98,9 @@ func (t TransactionDAL) CreateExchange(exchange *model.Exchange) error {
 	return nil
 }
 
-func (t TransactionDAL) GetTransferByID(transferID string) (*model.Transfer, error) {
+func (t TransactionDAL) GetTransferByID(ctx context.Context, transferID string) (*model.Transfer, error) {
 	var transfer *model.Transfer
-	err := t.TransferCollection.FindOne(context.TODO(), bson.D{{"_id", transferID}}).Decode(transfer)
+	err := t.TransferCollection.FindOne(ctx, bson.D{{"_id", transferID}}).Decode(transfer)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -112,9 +112,9 @@ func (t TransactionDAL) GetTransferByID(transferID string) (*model.Transfer, err
 	return transfer, nil
 }
 
-func (t TransactionDAL) GetWithdrawalByID(withdrawalID string) (*model.Withdrawal, error) {
+func (t TransactionDAL) GetWithdrawalByID(ctx context.Context, withdrawalID string) (*model.Withdrawal, error) {
 	var withdrawal *model.Withdrawal
-	err := t.WithdrawalCollection.FindOne(context.TODO(), bson.D{{"_id", withdrawalID}}).Decode(withdrawal)
+	err := t.WithdrawalCollection.FindOne(ctx, bson.D{{"_id", withdrawalID}}).Decode(withdrawal)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -126,9 +126,9 @@ func (t TransactionDAL) GetWithdrawalByID(withdrawalID string) (*model.Withdrawa
 	return withdrawal, nil
 }
 
-func (t TransactionDAL) GetDepositByID(depositID string) (*model.Deposit, error) {
+func (t TransactionDAL) GetDepositByID(ctx context.Context, depositID string) (*model.Deposit, error) {
 	var deposit *model.Deposit
-	err := t.DepositCollection.FindOne(context.TODO(), bson.D{{"_id", depositID}}).Decode(deposit)
+	err := t.DepositCollection.FindOne(ctx, bson.D{{"_id", depositID}}).Decode(deposit)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -140,9 +140,9 @@ func (t TransactionDAL) GetDepositByID(depositID string) (*model.Deposit, error)
 	return deposit, nil
 }
 
-func (t TransactionDAL) GetExchangeByID(exchangeID string) (*model.Exchange, error) {
+func (t TransactionDAL) GetExchangeByID(ctx context.Context, exchangeID string) (*model.Exchange, error) {
 	var exchange *model.Exchange
-	err := t.ExchangeCollection.FindOne(context.TODO(), bson.D{{"_id", exchangeID}}).Decode(exchange)
+	err := t.ExchangeCollection.FindOne(ctx, bson.D{{"_id", exchangeID}}).Decode(exchange)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -154,60 +154,60 @@ func (t TransactionDAL) GetExchangeByID(exchangeID string) (*model.Exchange, err
 	return exchange, nil
 }
 
-func (t TransactionDAL) FetchTransfers(query bson.D) (*[]model.Transfer, error) {
+func (t TransactionDAL) FetchTransfers(ctx context.Context, query bson.D) (*[]model.Transfer, error) {
 	var transfers []model.Transfer
 
-	cursor, err := t.TransferCollection.Find(context.TODO(), query)
+	cursor, err := t.TransferCollection.Find(ctx, query)
 	if err != nil {
 		log.Fatalf("[Mongo]: error fetching transfers: %s", err.Error())
 		return nil, err
 	}
-	if err = cursor.All(context.TODO(), &transfers); err != nil {
+	if err = cursor.All(ctx, &transfers); err != nil {
 		log.Fatalf("[Mongo]: error decoding transfer results: %s", err.Error())
 		return nil, err
 	}
 	return &transfers, nil
 }
 
-func (t TransactionDAL) FetchDeposits(query bson.D) (*[]model.Deposit, error) {
+func (t TransactionDAL) FetchDeposits(ctx context.Context, query bson.D) (*[]model.Deposit, error) {
 	var deposits []model.Deposit
 
-	cursor, err := t.DepositCollection.Find(context.TODO(), query)
+	cursor, err := t.DepositCollection.Find(ctx, query)
 	if err != nil {
 		log.Fatalf("[Mongo]: error decoding deposit results: %s", err.Error())
 		return nil, err
 	}
-	if err = cursor.All(context.TODO(), &deposits); err != nil {
+	if err = cursor.All(ctx, &deposits); err != nil {
 		log.Fatalf("[Mongo]: error decoding deposit results: %s", err.Error())
 		return nil, err
 	}
 	return &deposits, nil
 }
 
-func (t TransactionDAL) FetchWithdrawals(query bson.D) (*[]model.Withdrawal, error) {
+func (t TransactionDAL) FetchWithdrawals(ctx context.Context, query bson.D) (*[]model.Withdrawal, error) {
 	var withdrawals []model.Withdrawal
 
-	cursor, err := t.WithdrawalCollection.Find(context.TODO(), query)
+	cursor, err := t.WithdrawalCollection.Find(ctx, query)
 	if err != nil {
 		log.Fatalf("[Mongo]: error fetching withdrawals: %s", err.Error())
 		return nil, err
 	}
-	if err = cursor.All(context.TODO(), &withdrawals); err != nil {
+	if err = cursor.All(ctx, &withdrawals); err != nil {
 		log.Fatalf("[Mongo]: error decoding withdrawal results: %s", err.Error())
 		return nil, err
 	}
 	return &withdrawals, err
 }
 
-func (t TransactionDAL) FetchExchanges(query bson.D) (*[]model.Exchange, error) {
+func (t TransactionDAL) FetchExchanges(ctx context.Context, query bson.D) (*[]model.Exchange, error) {
 	var exchanges []model.Exchange
 
-	cursor, err := t.ExchangeCollection.Find(context.TODO(), query)
+	cursor, err := t.ExchangeCollection.Find(ctx, query)
 	if err != nil {
 		log.Fatalf("[Mongo]: error fetching exchanges: %s", err.Error())
 		return nil, err
 	}
-	if err = cursor.All(context.TODO(), &exchanges); err != nil {
+	if err = cursor.All(ctx, &exchanges); err != nil {
 		log.Fatalf("[Mongo]: error decoding exchange results: %s", err.Error())
 		return nil, err
 	}
@@ -227,8 +227,8 @@ func (t TransactionDAL) UpdateTransfer(ctx context.Context, transferID string, u
 	return nil
 }
 
-func (t TransactionDAL) UpdateWithdrawal(withdrawalID string, updateParam bson.D) error {
-	result, err := t.WithdrawalCollection.UpdateByID(context.TODO(), withdrawalID, updateParam)
+func (t TransactionDAL) UpdateWithdrawal(ctx context.Context, withdrawalID string, updateParam bson.D) error {
+	result, err := t.WithdrawalCollection.UpdateByID(ctx, withdrawalID, updateParam)
 	if err != nil {
 		logrus.Fatalf("[Mongo]: error updating withdrawal %s: %s", withdrawalID, err.Error())
 		return err
@@ -242,8 +242,8 @@ func (t TransactionDAL) UpdateWithdrawal(withdrawalID string, updateParam bson.D
 	return nil
 }
 
-func (t TransactionDAL) UpdateDeposit(depositID string, updateParam bson.D) error {
-	result, err := t.DepositCollection.UpdateByID(context.TODO(), depositID, updateParam)
+func (t TransactionDAL) UpdateDeposit(ctx context.Context, depositID string, updateParam bson.D) error {
+	result, err := t.DepositCollection.UpdateByID(ctx, depositID, updateParam)
 	if err != nil {
 		logrus.Fatalf("[Mongo]: error updating deposit %s: %s", depositID, err.Error())
 		return err
@@ -257,8 +257,8 @@ func (t TransactionDAL) UpdateDeposit(depositID string, updateParam bson.D) erro
 	return nil
 }
 
-func (t TransactionDAL) UpdateExchange(exchangeID string, updateParam bson.D) error {
-	result, err := t.ExchangeCollection.UpdateByID(context.TODO(), exchangeID, updateParam)
+func (t TransactionDAL) UpdateExchange(ctx context.Context, exchangeID string, updateParam bson.D) error {
+	result, err := t.ExchangeCollection.UpdateByID(ctx, exchangeID, updateParam)
 	if err != nil {
 		logrus.Fatalf("[Mongo]: error updating exchange %s: %s", exchangeID, err.Error())
 		return err
