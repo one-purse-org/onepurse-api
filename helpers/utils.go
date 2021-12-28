@@ -45,6 +45,7 @@ func MarshalStructToBSONDoc(structure interface{}) (bson.D, error) {
 	return doc, nil
 }
 
+//CreateOTP creates an otp code using the userID as secret
 func CreateOTP(user *model.User) (*otp.Key, error) {
 	token, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      "onepurse",
@@ -63,6 +64,7 @@ func CreateOTP(user *model.User) (*otp.Key, error) {
 	return token, err
 }
 
+//CreateOTPCode creates an otp code using the userID as secret
 func CreateOTPCode(userID string) (string, error) {
 	s := generateSecret(userID)
 
@@ -80,6 +82,7 @@ func CreateOTPCode(userID string) (string, error) {
 	return passcode, err
 }
 
+//ValidateOTPCode validates a passcode using the userID as secret
 func ValidateOTPCode(userID string, passcode string) bool {
 	s := generateSecret(userID)
 
@@ -98,8 +101,17 @@ func ValidateOTPCode(userID string, passcode string) bool {
 	return valid
 }
 
+//generateSecret generates secret for generating and validating OTP
 func generateSecret(key string) string {
 	secret := []byte(key)
 	s := base32.StdEncoding.EncodeToString(secret)
 	return s
+}
+
+//DoUserWalletCheck checks to see if a user has activated the specified wallet
+func DoUserWalletCheck(user *model.User, walletType string) bool {
+	if _, found := user.Wallet[walletType]; found {
+		return true
+	}
+	return false
 }

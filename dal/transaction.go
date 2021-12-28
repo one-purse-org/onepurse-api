@@ -190,11 +190,11 @@ func (t TransactionDAL) FetchTransfers(ctx context.Context, query bson.D) (*[]mo
 
 	cursor, err := t.TransferCollection.Find(ctx, query)
 	if err != nil {
-		log.Fatalf("[Mongo]: error fetching transfers: %s", err.Error())
+		logrus.Errorf("[Mongo]: error fetching transfers: %s", err.Error())
 		return nil, err
 	}
 	if err = cursor.All(ctx, &transfers); err != nil {
-		log.Fatalf("[Mongo]: error decoding transfer results: %s", err.Error())
+		logrus.Errorf("[Mongo]: error decoding transfer results: %s", err.Error())
 		return nil, err
 	}
 	return &transfers, nil

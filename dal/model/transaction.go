@@ -30,12 +30,15 @@ type Transfer struct {
 
 //OnePurseTransaction refers to transfer between one purse users
 type OnePurseTransaction struct {
-	FromUser User    `bson:"from_user" json:"from_user"` // user initiating the one purse transaction
-	ToUser   User    `bson:"to_user" json:"to_user"`
-	Amount   float32 `bson:"amount" json:"amount"`
-	Currency string  `bson:"currency" json:"currency"`
-	Status   string  `bson:"status" json:"status"`
-	Type     string  `bson:"type" json:"type"` // can either be pay or request
+	ID        string    `bson:"_id" json:"id"`
+	FromUser  *User     `bson:"from_user" json:"from_user"` // user initiating the one purse transaction
+	ToUser    *User     `bson:"to_user" json:"to_user"`
+	Amount    float32   `bson:"amount" json:"amount"`
+	Currency  string    `bson:"currency" json:"currency"`
+	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+	UpdatedAt time.Time `bson:"updated_at" json:"updated_at"`
+	Status    string    `bson:"status" json:"status"`
+	Type      string    `bson:"type" json:"type"` // can either be pay or request
 }
 
 type Deposit struct {

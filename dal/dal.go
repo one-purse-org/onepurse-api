@@ -9,12 +9,13 @@ import (
 )
 
 type DAL struct {
-	Client         *mongo.Client
-	DB             *mongo.Database
-	UserDAL        IUserDAL
-	CurrencyDAL    ICurrencyDAL
-	TransactionDAL ITransactionDAL
-	AgentDAL       IAgentDAL
+	Client          *mongo.Client
+	DB              *mongo.Database
+	UserDAL         IUserDAL
+	CurrencyDAL     ICurrencyDAL
+	TransactionDAL  ITransactionDAL
+	AgentDAL        IAgentDAL
+	NotificationDAL INotificationDAL
 }
 
 func (d *DAL) setupDALObjects(cfg *config.Config) error {
@@ -35,6 +36,7 @@ func (d *DAL) setupDALObjects(cfg *config.Config) error {
 	d.CurrencyDAL = NewCurrencyDAL(d.DB)
 	d.TransactionDAL = NewTransactionDAL(d.DB)
 	d.AgentDAL = NewAgentDAL(d.DB)
+	d.NotificationDAL = NewNotificationDAL(d.DB)
 	return nil
 }
 

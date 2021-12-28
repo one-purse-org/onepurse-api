@@ -345,10 +345,84 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 			Payload: response,
 		}
 
-	case types.ONE_PURSE_TRANSFER:
-		return &ServerResponse{
-			Payload: nil,
+	case types.ONE_PURSE_TRANSACTION:
+		var transaction model.OnePurseTransaction
+		if err := decodeJSONBody(&tracingContext, r.Body, &transaction); err != nil {
+			return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
 		}
+
+		if transaction.FromUser == nil || transaction.ToUser == nil {
+			return RespondWithError(nil, "sender and receiver is required", http.StatusBadRequest, &tracingContext)
+		}
+		if transaction.Currency == "" || transaction.Amount == 0 {
+			return RespondWithError(nil, "transaction amount and currency is required", http.StatusBadRequest, &tracingContext)
+		}
+		if transaction.Type == "" {
+			return RespondWithError(nil, "transaction type must be specified", http.StatusBadRequest, &tracingContext)
+		}
+		transaction.CreatedAt = time.Now()
+		transaction.Status = "created"
+		transaction.ID = cuid.New()
+
+		if transaction.Type == types.REQUEST {
+			err := a.Deps.DAL.TransactionDAL.CreateOnePurseTransaction(context.TODO(), &transaction)
+			if err != nil {
+				return RespondWithError(err, "unable to create transaction. Please try again", http.StatusInternalServerError, &tracingContext)
+			}
+			// Create a Notification
+			message := fmt.Sprintf("%s requested for %s %v from you", transaction.FromUser.UserName, transaction.Currency, transaction.Amount)
+			notification := &model.UserNotification{
+				ID:        cuid.New(),
+				UserID:    transaction.ToUser.ID,
+				Title:     "Payment requested",
+				Message:   message,
+				InfoType:  types.ONE_PURSE_TRANSACTION,
+				InfoData:  transaction,
+				CreatedAt: time.Now(),
+				Read:      false,
+			}
+			err = a.Deps.DAL.NotificationDAL.CreateUserNotification(context.TODO(), notification)
+			if err != nil {
+				return RespondWithError(err, "unable to create notification", http.StatusInternalServerError, &tracingContext)
+			}
+
+			response := map[string]interface{}{
+				"message": "successfully sent payment request",
+			}
+			return &ServerResponse{
+				Payload: response,
+			}
+		} else if transaction.Type == types.PAY {
+			err := a.Deps.DAL.TransactionDAL.CreateOnePurseTransaction(context.TODO(), &transaction)
+			if err != nil {
+				return RespondWithError(err, "unable to create transaction. Please try again", http.StatusInternalServerError, &tracingContext)
+			}
+
+			// create Notification
+			message := fmt.Sprintf("%s just sent %s %v to you", transaction.FromUser.UserName, transaction.Currency, transaction.Amount)
+			notification := &model.UserNotification{
+				ID:        cuid.New(),
+				UserID:    transaction.ToUser.ID,
+				Title:     "Payment Received",
+				Message:   message,
+				InfoType:  types.ONE_PURSE_TRANSACTION,
+				InfoData:  transaction,
+				CreatedAt: time.Now(),
+				Read:      false,
+			}
+			err = a.Deps.DAL.NotificationDAL.CreateUserNotification(context.TODO(), notification)
+			if err != nil {
+				return RespondWithError(err, "unable to create notification", http.StatusInternalServerError, &tracingContext)
+			}
+
+			response := map[string]interface{}{
+				"message": "successfully made payment",
+			}
+			return &ServerResponse{
+				Payload: response,
+			}
+		}
+		return RespondWithError(nil, "transaction type not supported", http.StatusBadRequest, &tracingContext)
 
 	case types.WITHDRAW:
 		var withdrawal model.Withdrawal
