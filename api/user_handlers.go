@@ -8,6 +8,7 @@ import (
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
 	"github.com/isongjosiah/work/onepurse-api/helpers"
 	"github.com/isongjosiah/work/onepurse-api/tracing"
+	"github.com/isongjosiah/work/onepurse-api/types"
 	"github.com/lucsky/cuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -310,7 +311,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		return RespondWithError(err, "Unable to get user information", http.StatusInternalServerError, &tracingContext)
 	}
 	switch transactionType {
-	case "transfer":
+	case types.TRANSFER:
 		var transfer model.Transfer
 		if err := decodeJSONBody(&tracingContext, r.Body, &transfer); err != nil {
 			return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
@@ -344,7 +345,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 			Payload: response,
 		}
 
-	case "withdraw":
+	case types.WITHDRAW:
 		var withdrawal model.Withdrawal
 		if err := decodeJSONBody(&tracingContext, r.Body, &withdrawal); err != nil {
 			return RespondWithError(nil, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
@@ -378,7 +379,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 			Payload: response,
 		}
 
-	case "deposit":
+	case types.DEPOSIT:
 		var deposit model.Deposit
 		if err := decodeJSONBody(&tracingContext, r.Body, &deposit); err != nil {
 			return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
@@ -408,7 +409,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 			Payload: response,
 		}
 
-	case "exchange":
+	case types.EXCHANGE:
 		var exchange model.Exchange
 		if err := decodeJSONBody(&tracingContext, r.Body, &exchange); err != nil {
 			return RespondWithError(nil, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
@@ -457,7 +458,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 	transactionId := chi.URLParam(r, "transactionID")
 
 	switch transactionType {
-	case "transfer":
+	case types.TRANSFER:
 		var transfer model.Transfer
 
 		if err := decodeJSONBody(&tracingContext, r.Body, &transfer); err != nil {
@@ -490,7 +491,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		return &ServerResponse{
 			Payload: response,
 		}
-	case "withdraw":
+	case types.WITHDRAW:
 		var withdrawal model.Withdrawal
 
 		if err := decodeJSONBody(&tracingContext, r.Body, &withdrawal); err != nil {
@@ -523,7 +524,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		return &ServerResponse{
 			Payload: response,
 		}
-	case "deposit":
+	case types.DEPOSIT:
 		var deposit model.Deposit
 		if err := decodeJSONBody(&tracingContext, r.Body, &deposit); err != nil {
 			return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
@@ -554,7 +555,7 @@ func (a *API) updateTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		return &ServerResponse{
 			Payload: response,
 		}
-	case "exchange":
+	case types.EXCHANGE:
 		var exchange model.Exchange
 
 		if err := decodeJSONBody(&tracingContext, r.Body, &exchange); err != nil {
@@ -616,15 +617,15 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 			return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
 		}
 
-		response["transfer"] = transfers
-		response["withdraws"] = withdraws
-		response["deposits"] = deposits
+		response[types.TRANSFER] = transfers
+		response[types.WITHDRAW] = withdraws
+		response[types.DEPOSIT] = deposits
 		response["exchanges"] = exchanges
 
 		return &ServerResponse{
 			Payload: response,
 		}
-	case "transfers":
+	case types.TRANSFER:
 		transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
@@ -632,7 +633,7 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 		return &ServerResponse{
 			Payload: transfers,
 		}
-	case "withdraws":
+	case types.WITHDRAW:
 		withdraws, err := a.Deps.DAL.TransactionDAL.FetchWithdrawals(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch withdraws", http.StatusInternalServerError, &tracingContext)
@@ -640,7 +641,7 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 		return &ServerResponse{
 			Payload: withdraws,
 		}
-	case "deposit":
+	case types.DEPOSIT:
 		deposits, err := a.Deps.DAL.TransactionDAL.FetchDeposits(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch deposits", http.StatusInternalServerError, &tracingContext)
@@ -648,7 +649,7 @@ func (a *API) getTransaction(w http.ResponseWriter, r *http.Request) *ServerResp
 		return &ServerResponse{
 			Payload: deposits,
 		}
-	case "exchange":
+	case types.EXCHANGE:
 		exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(context.TODO(), query)
 		if err != nil {
 			return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
@@ -676,7 +677,7 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 	defer ses.EndSession(ctx)
 
 	switch transactionType {
-	case "transfer":
+	case types.TRANSFER:
 		transfer, err := a.Deps.DAL.TransactionDAL.GetTransferByID(context.TODO(), transactionId)
 		if err != nil {
 			return RespondWithError(err, "could not fetch exchange information", http.StatusInternalServerError, &tracingContext)
@@ -708,7 +709,7 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 			Payload: result,
 		}
 
-	case "exchange":
+	case types.EXCHANGE:
 		exchange, err := a.Deps.DAL.TransactionDAL.GetExchangeByID(context.TODO(), transactionId)
 		if err != nil {
 			return RespondWithError(err, "could not fetch exchange information", http.StatusInternalServerError, &tracingContext)
@@ -741,7 +742,7 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 			}
 		}
 
-	case "deposit":
+	case types.DEPOSIT:
 		deposit, err := a.Deps.DAL.TransactionDAL.GetDepositByID(context.TODO(), transactionId)
 		if err != nil {
 			return RespondWithError(err, "could not fetch deposit information", http.StatusInternalServerError, &tracingContext)
@@ -881,9 +882,9 @@ func (a *API) getWalletTransaction(w http.ResponseWriter, r *http.Request) *Serv
 		return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
 	}
 
-	response["transfer"] = transfers
-	response["withdraws"] = withdraws
-	response["deposits"] = deposits
+	response[types.TRANSFER] = transfers
+	response[types.WITHDRAW] = withdraws
+	response[types.DEPOSIT] = deposits
 	response["exchanges"] = exchanges
 
 	return &ServerResponse{

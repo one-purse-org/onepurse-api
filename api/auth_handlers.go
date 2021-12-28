@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"github.com/aws/smithy-go"
 	"github.com/go-chi/chi"
@@ -61,7 +62,7 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) *ServerResponse {
 			}
 		}
 	}
-	user, err := a.Deps.DAL.UserDAL.FindByUsername(login.Username)
+	user, err := a.Deps.DAL.UserDAL.FindByUsername(context.TODO(), login.Username)
 	if err != nil {
 		return RespondWithError(err, "Failed to fetch user information", http.StatusInternalServerError, &tracingContext)
 
@@ -126,7 +127,7 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) *ServerResponse {
 		IsIDVerified: false,
 	}
 
-	err = a.Deps.DAL.UserDAL.Add(user)
+	err = a.Deps.DAL.UserDAL.Add(context.TODO(), user)
 	if err != nil {
 		return RespondWithError(err, "Failed to create user", http.StatusInternalServerError, &tracingContext)
 	}
