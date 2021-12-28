@@ -3,14 +3,19 @@ package model
 import "time"
 
 type Agent struct {
-	ID string `bson:"id" json:"id"`
+	ID          string      `bson:"id" json:"id"`
+	Agent       *Agent      `bson:"agent" json:"agent"`
+	Name        string      `bson:"name" json:"name"`
+	Wallet      AgentWallet `bson:"wallet" json:"wallet"`
+	DeviceToken string      `bson:"device_token" json:"device_token"`
 }
 
 type AgentAccount struct {
-	ID     string      `bson:"_id" json:"id"`
-	Agent  *Agent      `bson:"agent" json:"agent"`
-	Name   string      `bson:"name" json:"name"`
-	Wallet AgentWallet `bson:"wallet" json:"wallet"`
+	ID          string      `bson:"_id" json:"id"`
+	Agent       *Agent      `bson:"agent" json:"agent"`
+	Name        string      `bson:"name" json:"name"`
+	Wallet      AgentWallet `bson:"wallet" json:"wallet"`
+	DeviceToken string      `bson:"device_token" json:"device_token"`
 }
 
 type AgentWallet struct {

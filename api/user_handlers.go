@@ -25,8 +25,8 @@ func (a *API) UserRoutes() http.Handler {
 
 	// Profile Routes
 	router.Method("POST", "/change_password", Handler(a.changePassword))
-	router.Method("POST", "/{userID}/create_username", Handler(a.createUserName))
-	router.Method("PATCH", "/{userID}/transaction_password", Handler(a.TransactionPasswordActions))
+	router.Method("PATCH", "/{userID}/username", Handler(a.updateUserName))
+	router.Method("PATCH", "/{userID}/transaction_password", Handler(a.transactionPasswordActions))
 	router.Method("PATCH", "/{userID}/update_kyc_information", Handler(a.updateKYCInformation))
 	router.Method("PATCH", "/{userID}/profile", Handler(a.updateProfile))
 
@@ -89,7 +89,7 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) *ServerResp
 	return &ServerResponse{Payload: response}
 }
 
-func (a *API) TransactionPasswordActions(w http.ResponseWriter, r *http.Request) *ServerResponse {
+func (a *API) transactionPasswordActions(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	userID := chi.URLParam(r, "userID")
 	action := r.URL.Query().Get("action")
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
@@ -171,7 +171,7 @@ func (a *API) TransactionPasswordActions(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (a *API) createUserName(w http.ResponseWriter, r *http.Request) *ServerResponse {
+func (a *API) updateUserName(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	var param model.UpdateUsername
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
 	userID := chi.URLParam(r, "userID")
@@ -278,7 +278,6 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) *ServerRespo
 		return RespondWithError(err, "failed to decode request body", http.StatusBadRequest, &tracingContext)
 	}
 	temp := &model.User{
-		UserName:    user.UserName,
 		PhoneNumber: user.PhoneNumber,
 		Email:       user.Email,
 	}
@@ -303,6 +302,7 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) *ServerRespo
 // Transaction
 
 func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	ctx := context.Background()
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
 	transactionType := r.URL.Query().Get("transaction-type")
 	userId := chi.URLParam(r, "userID")
@@ -310,6 +310,14 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 	if err != nil {
 		return RespondWithError(err, "Unable to get user information", http.StatusInternalServerError, &tracingContext)
 	}
+
+	// start a transaction session
+	ses, err := a.Deps.DAL.Client.StartSession()
+	if err != nil {
+		logrus.Fatalf("[Mongo]: unable to create a session: %s", err.Error())
+		return RespondWithError(nil, "Something went wrong. Please Try again", http.StatusInternalServerError, &tracingContext)
+	}
+	defer ses.EndSession(ctx)
 	switch transactionType {
 	case types.TRANSFER:
 		var transfer model.Transfer
@@ -360,30 +368,30 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		if transaction.Type == "" {
 			return RespondWithError(nil, "transaction type must be specified", http.StatusBadRequest, &tracingContext)
 		}
+
 		transaction.CreatedAt = time.Now()
 		transaction.Status = "created"
 		transaction.ID = cuid.New()
 
 		if transaction.Type == types.REQUEST {
-			err := a.Deps.DAL.TransactionDAL.CreateOnePurseTransaction(context.TODO(), &transaction)
+			_, err := ses.WithTransaction(ctx, func(sesCtx mongo.SessionContext) (interface{}, error) {
+				// Create transaction
+				err = a.Deps.DAL.TransactionDAL.CreateOnePurseTransaction(sesCtx, &transaction)
+				if err != nil {
+					return nil, errors.Wrap(err, "unable to create transaction")
+				}
+
+				// Create a Notification
+				message := fmt.Sprintf("%s requested for %s %v from you", transaction.FromUser.UserName, transaction.Currency, transaction.Amount)
+				err := a.CreateNotification(sesCtx, transaction.ToUser.ID, types.PAYMENT_REQUEST, message, types.ONE_PURSE_TRANSACTION, transaction.ToUser.DeviceToken, transaction)
+				if err != nil {
+					return nil, errors.Wrap(err, "unable to send notification")
+				}
+
+				return nil, nil
+			})
 			if err != nil {
-				return RespondWithError(err, "unable to create transaction. Please try again", http.StatusInternalServerError, &tracingContext)
-			}
-			// Create a Notification
-			message := fmt.Sprintf("%s requested for %s %v from you", transaction.FromUser.UserName, transaction.Currency, transaction.Amount)
-			notification := &model.UserNotification{
-				ID:        cuid.New(),
-				UserID:    transaction.ToUser.ID,
-				Title:     "Payment requested",
-				Message:   message,
-				InfoType:  types.ONE_PURSE_TRANSACTION,
-				InfoData:  transaction,
-				CreatedAt: time.Now(),
-				Read:      false,
-			}
-			err = a.Deps.DAL.NotificationDAL.CreateUserNotification(context.TODO(), notification)
-			if err != nil {
-				return RespondWithError(err, "unable to create notification", http.StatusInternalServerError, &tracingContext)
+				return RespondWithError(err, "something went wrong. Please try again", http.StatusInternalServerError, &tracingContext)
 			}
 
 			response := map[string]interface{}{
@@ -393,26 +401,63 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 				Payload: response,
 			}
 		} else if transaction.Type == types.PAY {
-			err := a.Deps.DAL.TransactionDAL.CreateOnePurseTransaction(context.TODO(), &transaction)
-			if err != nil {
-				return RespondWithError(err, "unable to create transaction. Please try again", http.StatusInternalServerError, &tracingContext)
+			// check that sender has enough in wallet
+			pass := helpers.DoSufficientFundsCheck(user, transaction.Amount, transaction.Currency)
+			if !pass {
+				return RespondWithError(nil, "Insufficient funds. Please top-up wallet", http.StatusBadRequest, &tracingContext)
 			}
+			_, err := ses.WithTransaction(ctx, func(sesCtx mongo.SessionContext) (interface{}, error) {
+				// check that user has a wallet for currency being sent, and create if not
+				pass := helpers.DoUserWalletCheck(transaction.ToUser, transaction.Currency)
+				if !pass {
+					// create wallet for user
+					wallet := &model.UserWallet{
+						Currency:         transaction.Currency,
+						AvailableBalance: 0,
+						PendingBalance:   0,
+						TotalVolume:      0,
+						CreatedAt:        time.Now(),
+					}
+					err := a.Deps.DAL.UserDAL.UpdateUser(sesCtx, transaction.ToUser.ID, bson.D{{fmt.Sprintf("wallet.%s", transaction.Currency), wallet}})
+					if err != nil {
+						return nil, errors.New("could not create wallet for user")
+					}
+				}
 
-			// create Notification
-			message := fmt.Sprintf("%s just sent %s %v to you", transaction.FromUser.UserName, transaction.Currency, transaction.Amount)
-			notification := &model.UserNotification{
-				ID:        cuid.New(),
-				UserID:    transaction.ToUser.ID,
-				Title:     "Payment Received",
-				Message:   message,
-				InfoType:  types.ONE_PURSE_TRANSACTION,
-				InfoData:  transaction,
-				CreatedAt: time.Now(),
-				Read:      false,
-			}
-			err = a.Deps.DAL.NotificationDAL.CreateUserNotification(context.TODO(), notification)
+				// create Notification
+				message := fmt.Sprintf("%s just sent %s %v to you", transaction.FromUser.UserName, transaction.Currency, transaction.Amount)
+				err := a.CreateNotification(sesCtx, transaction.ToUser.ID, types.PAYMENT_RECEIVED, message, types.ONE_PURSE_TRANSACTION, transaction.ToUser.DeviceToken, transaction)
+				if err != nil {
+					return nil, err
+				}
+
+				// remove amount from sender's wallet
+				err = a.Deps.DAL.UserDAL.UpdateUser(sesCtx, transaction.FromUser.ID, bson.D{{"$inc",
+					bson.D{{
+						fmt.Sprintf("wallet.%s.available_balance", transaction.Currency), -transaction.Amount,
+					}}}})
+				if err != nil {
+					return nil, errors.New("unable to update sender's wallet")
+				}
+
+				//add amount to receivers wallet
+				err = a.Deps.DAL.UserDAL.UpdateUser(sesCtx, transaction.ToUser.ID, bson.D{{"$inc",
+					bson.D{{
+						fmt.Sprintf("wallet.%s.available_balance", transaction.Currency), transaction.Amount,
+					}}}})
+				if err != nil {
+					return nil, errors.New("unable to update recipient's wallet")
+				}
+
+				err = a.Deps.DAL.TransactionDAL.CreateOnePurseTransaction(sesCtx, &transaction)
+				if err != nil {
+					return nil, err
+				}
+
+				return nil, nil
+			})
 			if err != nil {
-				return RespondWithError(err, "unable to create notification", http.StatusInternalServerError, &tracingContext)
+				return RespondWithError(err, "Something went wrong. Please try again", http.StatusInternalServerError, &tracingContext)
 			}
 
 			response := map[string]interface{}{
@@ -779,6 +824,14 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 			if err != nil {
 				return nil, err
 			}
+
+			// create notification for agent
+			message := fmt.Sprintf("you have been matched to %s for a %s %v transaction", transfer.User.FullName, transfer.ConvCurrency, transfer.AmountSent)
+			err = a.CreateNotification(sesCtx, agent.ID, types.TRANSACTION_MATCH, message, types.TRANSFER, agent.DeviceToken, transfer)
+			if err != nil {
+				return nil, err
+			}
+
 			return agent, nil
 		})
 		if err != nil {
@@ -799,25 +852,68 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 				"wallet.USD.available_balance", exchange.BaseAmount}}}}
 
 			// start transaction
+			result, err := ses.WithTransaction(ctx, func(sesCtx mongo.SessionContext) (interface{}, error) {
+				user, err := a.Deps.DAL.UserDAL.FindOne(sesCtx, query)
+				if err != nil {
+					return nil, err
+				}
 
-			user, err := a.Deps.DAL.UserDAL.FindOne(context.TODO(), query)
+				err = a.Deps.DAL.UserDAL.UpdateUser(sesCtx, user.ID, bson.D{{"$inc", bson.D{{
+					fmt.Sprintf("wallet.%s.available_balance", exchange.ExchangeCurrency), -exchange.ExchangeAmount,
+				}, {fmt.Sprintf("wallet.%s.pending_balance", exchange.ExchangeCurrency), exchange.ExchangeAmount}}}})
+				if err != nil {
+					return nil, err
+				}
+
+				// create notification
+				message := fmt.Sprintf("you have been matched to %s for a %s %v transaction", exchange.User.FullName, exchange.ExchangeCurrency, exchange.ExchangeAmount)
+				err = a.CreateNotification(sesCtx, user.ID, types.TRANSACTION_MATCH, message, types.EXCHANGE, user.DeviceToken, exchange)
+				if err != nil {
+					return nil, err
+				}
+				return user, nil
+			})
 			if err != nil {
 				return RespondWithError(err, "unable to find user for your transaction now", http.StatusInternalServerError, &tracingContext)
 			}
 			return &ServerResponse{
-				Payload: user,
+				Payload: result,
 			}
 		} else {
 			query := bson.D{{"$gte", bson.D{{
 				fmt.Sprintf("wallet.available_balance"), exchange.BaseAmount}}},
 				{"wallet.currency", exchange.BaseCurrency}}
 
-			agent, err := a.Deps.DAL.AgentDAL.FindOne(context.TODO(), query)
+			//start transaction
+			result, err := ses.WithTransaction(ctx, func(sesCtx mongo.SessionContext) (interface{}, error) {
+				agent, err := a.Deps.DAL.AgentDAL.FindOne(context.TODO(), query)
+				if err != nil {
+					return nil, err
+				}
+
+				err = a.Deps.DAL.UserDAL.UpdateUser(sesCtx, agent.ID, bson.D{{"$inc", bson.D{
+					{fmt.Sprintf("wallet.%s.available_balance", exchange.ExchangeCurrency), -exchange.ExchangeAmount},
+					{fmt.Sprintf("wallet.%s.pending_balance", exchange.ExchangeCurrency), exchange.ExchangeAmount},
+				}}})
+				if err != nil {
+					return nil, err
+				}
+
+				// create notification
+				message := fmt.Sprintf("you have been matched to %s for a %s %v transaction", exchange.User.FullName, exchange.ExchangeCurrency, exchange.ExchangeAmount)
+				err = a.CreateNotification(sesCtx, agent.ID, types.TRANSACTION_MATCH, message, types.EXCHANGE, agent.DeviceToken, exchange)
+				if err != nil {
+					return nil, err
+				}
+
+				return agent, nil
+			})
+
 			if err != nil {
 				return RespondWithError(err, "unable to find an agent for your transaction right now", http.StatusInternalServerError, &tracingContext)
 			}
 			return &ServerResponse{
-				Payload: agent,
+				Payload: result,
 			}
 		}
 
