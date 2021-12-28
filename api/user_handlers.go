@@ -345,6 +345,11 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 			Payload: response,
 		}
 
+	case types.ONE_PURSE_TRANSFER:
+		return &ServerResponse{
+			Payload: nil,
+		}
+
 	case types.WITHDRAW:
 		var withdrawal model.Withdrawal
 		if err := decodeJSONBody(&tracingContext, r.Body, &withdrawal); err != nil {

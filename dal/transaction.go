@@ -17,40 +17,45 @@ type ITransactionDAL interface {
 	CreateWithdrawal(ctx context.Context, withdrawal *model.Withdrawal) error
 	CreateDeposit(ctx context.Context, deposit *model.Deposit) error
 	CreateExchange(ctx context.Context, exchange *model.Exchange) error
+	CreateOnePurseTransaction(ctx context.Context, transaction *model.OnePurseTransaction) error
 
 	GetTransferByID(ctx context.Context, transferID string) (*model.Transfer, error)
 	GetWithdrawalByID(ctx context.Context, withdrawalID string) (*model.Withdrawal, error)
 	GetDepositByID(ctx context.Context, depositID string) (*model.Deposit, error)
 	GetExchangeByID(ctx context.Context, exchangeID string) (*model.Exchange, error)
+	GetOnePurseTransactionByID(ctx context.Context, transactionID string) (*model.OnePurseTransaction, error)
 
 	UpdateTransfer(ctx context.Context, transferID string, updateParam bson.D) error
 	UpdateWithdrawal(ctx context.Context, withdrawalID string, updateParam bson.D) error
 	UpdateDeposit(ctx context.Context, depositID string, updateParam bson.D) error
 	UpdateExchange(ctx context.Context, exchangeID string, updateParam bson.D) error
+	UpdateOnePurseTransaction(ctx context.Context, transactionID string, updateParam bson.D) error
 
 	FetchTransfers(ctx context.Context, query bson.D) (*[]model.Transfer, error)
 	FetchWithdrawals(ctx context.Context, query bson.D) (*[]model.Withdrawal, error)
 	FetchDeposits(ctx context.Context, query bson.D) (*[]model.Deposit, error)
 	FetchExchanges(ctx context.Context, query bson.D) (*[]model.Exchange, error)
+	FetchOnePurseTransactions(ctx context.Context, query bson.D) (*[]model.OnePurseTransaction, error)
 
 	CheckTimeLimit() error
 }
-
 type TransactionDAL struct {
-	DB                   *mongo.Database
-	TransferCollection   *mongo.Collection
-	WithdrawalCollection *mongo.Collection
-	DepositCollection    *mongo.Collection
-	ExchangeCollection   *mongo.Collection
+	DB                            *mongo.Database
+	TransferCollection            *mongo.Collection
+	WithdrawalCollection          *mongo.Collection
+	DepositCollection             *mongo.Collection
+	ExchangeCollection            *mongo.Collection
+	OnePurseTransactionCollection *mongo.Collection
 }
 
 func NewTransactionDAL(db *mongo.Database) *TransactionDAL {
 	return &TransactionDAL{
-		DB:                   db,
-		TransferCollection:   db.Collection("transfer"),
-		WithdrawalCollection: db.Collection("withdraw"),
-		DepositCollection:    db.Collection("deposit"),
-		ExchangeCollection:   db.Collection("exchange"),
+		DB:                            db,
+		TransferCollection:            db.Collection("transfer"),
+		WithdrawalCollection:          db.Collection("withdraw"),
+		DepositCollection:             db.Collection("deposit"),
+		ExchangeCollection:            db.Collection("exchange"),
+		OnePurseTransactionCollection: db.Collection("one-purse-transaction"),
 	}
 }
 
@@ -92,6 +97,17 @@ func (t TransactionDAL) CreateExchange(ctx context.Context, exchange *model.Exch
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return errors.New("exchange record already exists. You might be repeating a transaction")
+		}
+		return err
+	}
+	return nil
+}
+
+func (t TransactionDAL) CreateOnePurseTransaction(ctx context.Context, transaction *model.OnePurseTransaction) error {
+	_, err := t.OnePurseTransactionCollection.InsertOne(ctx, transaction)
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return errors.New("transaction record already exists. You might be repeating a transaction")
 		}
 		return err
 	}
@@ -154,6 +170,21 @@ func (t TransactionDAL) GetExchangeByID(ctx context.Context, exchangeID string) 
 	return exchange, nil
 }
 
+func (t TransactionDAL) GetOnePurseTransactionByID(ctx context.Context, transactionID string) (*model.OnePurseTransaction, error) {
+	var transaction *model.OnePurseTransaction
+	err := t.OnePurseTransactionCollection.FindOne(ctx, bson.D{{"_id", transactionID}}).Decode(transaction)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			findErr := fmt.Sprintf("record for transaction %s not found", transactionID)
+			return nil, errors.New(findErr)
+		}
+		return nil, err
+	}
+
+	return transaction, nil
+}
+
 func (t TransactionDAL) FetchTransfers(ctx context.Context, query bson.D) (*[]model.Transfer, error) {
 	var transfers []model.Transfer
 
@@ -214,6 +245,22 @@ func (t TransactionDAL) FetchExchanges(ctx context.Context, query bson.D) (*[]mo
 	return &exchanges, nil
 }
 
+func (t TransactionDAL) FetchOnePurseTransactions(ctx context.Context, query bson.D) (*[]model.OnePurseTransaction, error) {
+	var transactions []model.OnePurseTransaction
+
+	cursor, err := t.OnePurseTransactionCollection.Find(ctx, query)
+	if err != nil {
+		log.Fatalf("[Mongo]: error fetching transactions: %s", err.Error())
+		return nil, err
+	}
+
+	if err = cursor.All(ctx, &transactions); err != nil {
+		log.Fatalf("[Mongo]: error decoding transaction results: %s", err.Error())
+		return nil, err
+	}
+	return &transactions, nil
+}
+
 func (t TransactionDAL) UpdateTransfer(ctx context.Context, transferID string, updateParam bson.D) error {
 	result, err := t.TransferCollection.UpdateByID(ctx, transferID, updateParam)
 	if err != nil {
@@ -265,10 +312,24 @@ func (t TransactionDAL) UpdateExchange(ctx context.Context, exchangeID string, u
 	}
 
 	if result.MatchedCount == 0 {
-		logrus.Fatalf("[Mongo]: error updating exchange %s : user record not found", exchangeID)
+		logrus.Fatalf("[Mongo]: error updating exchange %s :  record not found", exchangeID)
 		return errors.New("exchange record not found")
 	}
 
+	return nil
+}
+
+func (t TransactionDAL) UpdateOnePurseTransaction(ctx context.Context, transactionID string, updateParam bson.D) error {
+	result, err := t.OnePurseTransactionCollection.UpdateByID(ctx, transactionID, updateParam)
+	if err != nil {
+		logrus.Fatalf("[Mongo]: error updating transaction %s: %s", transactionID, err.Error())
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		logrus.Fatalf("[Mongo] error updating transaction %s: record not found", transactionID)
+		return errors.New("transaction record not found")
+	}
 	return nil
 }
 
