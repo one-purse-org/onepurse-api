@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/isongjosiah/work/onepurse-api/config"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
-	"github.com/lucsky/cuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"time"
@@ -73,7 +72,6 @@ func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error
 	}
 
 	authResponse := &model.AuthResponse{
-		ID:           cuid.New(),
 		AccessToken:  *cognitoResponse.AuthenticationResult.AccessToken,
 		RefreshToken: *cognitoResponse.AuthenticationResult.RefreshToken,
 		ExpiresAt:    now.Add(time.Second * time.Duration(cognitoResponse.AuthenticationResult.ExpiresIn)),

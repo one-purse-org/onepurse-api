@@ -10,8 +10,8 @@ import (
 )
 
 type ICurrencyDAL interface {
-	Add(currency *model.Currency) error
-	FindAll() (*[]model.Currency, error)
+	Add(ctx context.Context, currency *model.Currency) error
+	FindAll(ctx context.Context) (*[]model.Currency, error)
 }
 
 type CurrencyDAL struct {
@@ -26,11 +26,11 @@ func NewCurrencyDAL(db *mongo.Database) *CurrencyDAL {
 	}
 }
 
-func (c CurrencyDAL) Add(currency *model.Currency) error {
-	_, err := c.Collection.InsertOne(context.TODO(), currency)
+func (c CurrencyDAL) Add(ctx context.Context, currency *model.Currency) error {
+	_, err := c.Collection.InsertOne(ctx, currency)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			return errors.New("Currency already exists")
+			return errors.New("BaseCurrency already exists")
 		} else {
 			return err
 		}
@@ -38,9 +38,9 @@ func (c CurrencyDAL) Add(currency *model.Currency) error {
 	return nil
 }
 
-func (c CurrencyDAL) FindAll() (*[]model.Currency, error) {
+func (c CurrencyDAL) FindAll(ctx context.Context) (*[]model.Currency, error) {
 	var currency *[]model.Currency
-	cursor, err := c.Collection.Find(context.TODO(), bson.D{})
+	cursor, err := c.Collection.Find(ctx, bson.D{})
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return &[]model.Currency{}, nil
@@ -50,7 +50,7 @@ func (c CurrencyDAL) FindAll() (*[]model.Currency, error) {
 		}
 	}
 
-	if err = cursor.All(context.TODO(), &currency); err != nil {
+	if err = cursor.All(ctx, &currency); err != nil {
 		logrus.Fatalf("[Mongo]: error parsing mongo document to currency model: %s", err.Error())
 		return nil, err
 	}

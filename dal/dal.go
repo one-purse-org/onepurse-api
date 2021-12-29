@@ -9,12 +9,13 @@ import (
 )
 
 type DAL struct {
-	DB *mongo.Database
-	// define a session to utilize transactions
-	Session mongo.Session
-
-	UserDAL     IUserDAL
-	CurrencyDAL ICurrencyDAL
+	Client          *mongo.Client
+	DB              *mongo.Database
+	UserDAL         IUserDAL
+	CurrencyDAL     ICurrencyDAL
+	TransactionDAL  ITransactionDAL
+	AgentDAL        IAgentDAL
+	NotificationDAL INotificationDAL
 }
 
 func (d *DAL) setupDALObjects(cfg *config.Config) error {
@@ -30,12 +31,12 @@ func (d *DAL) setupDALObjects(cfg *config.Config) error {
 		d.DB = client.Database("onepurse")
 	}
 
-	d.Session, err = client.StartSession()
-	if err != nil {
-		return errors.Wrapf(err, "[Mongo]: unable to create a session")
-	}
+	d.Client = client
 	d.UserDAL = NewUserDAL(d.DB)
 	d.CurrencyDAL = NewCurrencyDAL(d.DB)
+	d.TransactionDAL = NewTransactionDAL(d.DB)
+	d.AgentDAL = NewAgentDAL(d.DB)
+	d.NotificationDAL = NewNotificationDAL(d.DB)
 	return nil
 }
 
