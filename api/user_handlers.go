@@ -35,6 +35,7 @@ func (a *API) UserRoutes() http.Handler {
 	router.Method("PUT", "/transaction/{transactionID}/", Handler(a.updateTransaction))
 	router.Method("GET", "/{userID}/transaction", Handler(a.getTransaction))
 	router.Method("GET", "/transaction/{transactionID}/get_agent", Handler(a.getAgentForTransaction))
+	router.Method("PATCH", "/{ID}/respond_to_exchange", Handler(a.respondToExchange))
 
 	// OTP Token Routes
 	router.Method("GET", "/{userID}/otp", Handler(a.generateOTPToken))
@@ -858,11 +859,22 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 					return nil, err
 				}
 
-				err = a.Deps.DAL.UserDAL.UpdateUser(sesCtx, user.ID, bson.D{{"$inc", bson.D{{
-					fmt.Sprintf("wallet.%s.available_balance", exchange.ExchangeCurrency), -exchange.ExchangeAmount,
-				}, {fmt.Sprintf("wallet.%s.pending_balance", exchange.ExchangeCurrency), exchange.ExchangeAmount}}}})
+				// update agent wallet info
+				err = a.Deps.DAL.UserDAL.UpdateUser(sesCtx, exchange.AgentAccount.Agent.ID, bson.D{{"$inc",
+					bson.D{
+						{fmt.Sprintf("wallet.%s.available_balance", exchange.ExchangeCurrency), -exchange.ExchangeAmount},
+						{fmt.Sprintf("wallet.%s.pending_balance", exchange.ExchangeCurrency), exchange.ExchangeAmount}}}})
 				if err != nil {
 					return nil, err
+				}
+
+				// update initiator wallet info
+				err = a.Deps.DAL.UserDAL.UpdateUser(sesCtx, user.ID, bson.D{{"$inc",
+					bson.D{
+						{fmt.Sprintf("wallet.%s.available_balance", exchange.BaseCurrency), -exchange.BaseAmount},
+						{fmt.Sprintf("wallet.%s.pending_balance", exchange.BaseCurrency), exchange.BaseAmount}}}})
+				if err != nil {
+					return nil, nil
 				}
 
 				// create notification
@@ -936,6 +948,85 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 
 	return &ServerResponse{
 		Payload: nil,
+	}
+}
+
+func (a *API) respondToExchange(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	ID := chi.URLParam(r, "ID")
+	res := r.URL.Query().Get("response")
+	query := bson.D{{"$set", bson.D{{"status", res}, {"updated_at", time.Now()}}}}
+
+	// start a transaction session
+	ses, err := a.startTransaction()
+	if err != nil {
+		return RespondWithError(err, "something went wrong. Please try again", http.StatusInternalServerError, &tracingContext)
+	}
+	_, err = ses.WithTransaction(context.TODO(), func(sesCtx mongo.SessionContext) (interface{}, error) {
+		transaction, err := a.Deps.DAL.TransactionDAL.GetExchangeByID(sesCtx, ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if res == types.ACCEPT {
+			// update transaction status
+			err := a.Deps.DAL.TransactionDAL.UpdateExchange(sesCtx, ID, bson.D{{"$set", bson.D{{"status", res}}}})
+			if err != nil {
+				return nil, err
+			}
+			// update user wallet
+			err = a.Deps.DAL.UserDAL.UpdateUser(sesCtx, transaction.User.ID, bson.D{{"$inc",
+				bson.D{
+					{fmt.Sprintf("wallet.%s.pending_balance", transaction.BaseCurrency), transaction.BaseAmount},
+					{fmt.Sprintf("wallet.%s.available_balance", transaction.ExchangeCurrency), transaction.ExchangeAmount},
+				}}})
+			if err != nil {
+				return nil, nil
+			}
+
+			// update agent wallet
+			err = a.Deps.DAL.UserDAL.UpdateUser(sesCtx, transaction.AgentAccount.Agent.ID, bson.D{{
+				"$inc", bson.D{
+					{fmt.Sprintf("wallet.%s.available_balance", transaction.BaseCurrency), transaction.BaseAmount},
+					{fmt.Sprintf("wallet.%s.pending_balance", transaction.ExchangeCurrency), -transaction.ExchangeAmount},
+				}}})
+			if err != nil {
+				return nil, nil
+			}
+		} else {
+			// update user wallet
+			err = a.Deps.DAL.UserDAL.UpdateUser(sesCtx, transaction.User.ID, bson.D{{"$inc",
+				bson.D{
+					{fmt.Sprintf("wallet.%s.pending_balance", transaction.BaseCurrency), -transaction.BaseAmount},
+					{fmt.Sprintf("wallet.%s.available_balance", transaction.BaseCurrency), transaction.BaseAmount},
+				}}})
+			if err != nil {
+				return nil, nil
+			}
+
+			// update agent wallet
+			err = a.Deps.DAL.UserDAL.UpdateUser(sesCtx, transaction.AgentAccount.Agent.ID, bson.D{{
+				"$inc", bson.D{
+					{fmt.Sprintf("wallet.%s.available_balance", transaction.BaseCurrency), transaction.BaseAmount},
+					{fmt.Sprintf("wallet.%s.pending_balance", transaction.ExchangeCurrency), -transaction.ExchangeAmount},
+				}}})
+			if err != nil {
+				return nil, nil
+			}
+		}
+		return nil, nil
+	})
+
+	err = a.Deps.DAL.TransactionDAL.UpdateExchange(context.TODO(), ID, query)
+	if err != nil {
+		return RespondWithError(err, "Failed to respond to exchange request. Please try again", http.StatusInternalServerError, &tracingContext)
+	}
+
+	response := map[string]interface{}{
+		"message": "transaction response undertaken successfully",
+	}
+	return &ServerResponse{
+		Payload: response,
 	}
 }
 
