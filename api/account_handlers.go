@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"github.com/go-chi/chi"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
 	"github.com/isongjosiah/work/onepurse-api/tracing"
@@ -54,7 +55,7 @@ func (a *API) exchangePublicToken(w http.ResponseWriter, r *http.Request) *Serve
 	if err != nil {
 		return RespondWithError(err, "could not exchange public token", http.StatusInternalServerError, &tracingContext)
 	}
-	err = a.Deps.DAL.UserDAL.UpdateUser(userID, bson.D{{"plaid_access_token", accessToken}})
+	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, bson.D{{"plaid_access_token", accessToken}})
 	if err != nil {
 		return RespondWithError(err, "could not save access token", http.StatusInternalServerError, &tracingContext)
 	}
@@ -67,7 +68,7 @@ func (a *API) exchangePublicToken(w http.ResponseWriter, r *http.Request) *Serve
 func (a *API) fetchAccountDetails(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
 	userID := chi.URLParam(r, "userID")
-	user, err := a.Deps.DAL.UserDAL.FindByID(userID)
+	user, err := a.Deps.DAL.UserDAL.FindByID(context.TODO(), userID)
 	if err != nil {
 		return RespondWithError(err, "could not fetch user", http.StatusInternalServerError, &tracingContext)
 	}
@@ -77,5 +78,4 @@ func (a *API) fetchAccountDetails(w http.ResponseWriter, r *http.Request) *Serve
 		return RespondWithError(err, "could not fetch account details", http.StatusInternalServerError, &tracingContext)
 	}
 	return &ServerResponse{Payload: accountDetails}
-	return nil
 }

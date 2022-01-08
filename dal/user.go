@@ -131,12 +131,12 @@ func (u UserDAL) UpdateUser(ctx context.Context, userID string, updateParam bson
 func (u UserDAL) DeleteUser(ctx context.Context, userID string) error {
 	result, err := u.Collection.DeleteOne(ctx, bson.D{{"_id", userID}})
 	if err != nil {
-		logrus.Fatalf("error deleting user %s : %s", userID, err)
+		logrus.Errorf("error deleting user %s : %s", userID, err)
 		return err
 	}
 
 	if result.DeletedCount == 0 {
-		logrus.Fatalf("error deleting user %s : user record does not exist", userID)
+		logrus.Errorf("error deleting user %s : user record does not exist", userID)
 		return errors.New("user record does not exist")
 	}
 	return nil

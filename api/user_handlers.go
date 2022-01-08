@@ -220,7 +220,7 @@ func (a *API) updateUserName(w http.ResponseWriter, r *http.Request) *ServerResp
 }
 
 func (a *API) updateKYCInformation(w http.ResponseWriter, r *http.Request) *ServerResponse {
-	var user model.User
+	var user model.UpdateKYCInfo
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
 	userID := chi.URLParam(r, "userID")
 
@@ -234,7 +234,7 @@ func (a *API) updateKYCInformation(w http.ResponseWriter, r *http.Request) *Serv
 	if user.Nationality == "" {
 		return RespondWithError(nil, "nationality is required", http.StatusBadRequest, &tracingContext)
 	}
-	if user.DateOfBirth.IsZero() {
+	if user.DateOfBirth == "" {
 		return RespondWithError(nil, "date_of_birth is required", http.StatusBadRequest, &tracingContext)
 	}
 	if user.Gender == "" {
@@ -246,7 +246,7 @@ func (a *API) updateKYCInformation(w http.ResponseWriter, r *http.Request) *Serv
 	if user.IDNumber == "" {
 		return RespondWithError(nil, "id_number is required", http.StatusBadRequest, &tracingContext)
 	}
-	if user.IDExpiryDate.IsZero() {
+	if user.IDExpiryDate == "" {
 		return RespondWithError(nil, "id_expiry_date is required", http.StatusBadRequest, &tracingContext)
 	}
 	if user.IDImage == "" {
@@ -258,7 +258,7 @@ func (a *API) updateKYCInformation(w http.ResponseWriter, r *http.Request) *Serv
 		return RespondWithError(err, "Failed to marshal to bson document", http.StatusInternalServerError, &tracingContext)
 	}
 
-	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, doc)
+	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, bson.D{{"$set", doc}})
 	if err != nil {
 		return RespondWithError(err, "Failed to update KYC information", http.StatusInternalServerError, &tracingContext)
 	}
@@ -278,7 +278,7 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) *ServerRespo
 	if err := decodeJSONBody(&tracingContext, r.Body, &user); err != nil {
 		return RespondWithError(err, "failed to decode request body", http.StatusBadRequest, &tracingContext)
 	}
-	temp := &model.User{
+	temp := &model.UpdateUserInfo{
 		PhoneNumber: user.PhoneNumber,
 		Email:       user.Email,
 	}
