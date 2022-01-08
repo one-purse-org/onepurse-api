@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"github.com/go-chi/chi"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
 	"github.com/isongjosiah/work/onepurse-api/tracing"
@@ -30,7 +31,7 @@ func (a *API) createCurrency(w http.ResponseWriter, r *http.Request) *ServerResp
 		return RespondWithError(nil, "slug is required", http.StatusBadRequest, &tracingContext)
 	}
 
-	err := a.Deps.DAL.CurrencyDAL.Add(&currency)
+	err := a.Deps.DAL.CurrencyDAL.Add(context.TODO(), &currency)
 	if err != nil {
 		return RespondWithError(err, "Failed to add currency", http.StatusInternalServerError, &tracingContext)
 
