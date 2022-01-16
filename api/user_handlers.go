@@ -412,7 +412,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 				pass := helpers.DoUserWalletCheck(transaction.ToUser, transaction.Currency)
 				if !pass {
 					// create wallet for user
-					wallet := &model.UserWallet{
+					wallet := &model.Wallet{
 						Currency:         transaction.Currency,
 						AvailableBalance: 0,
 						PendingBalance:   0,
@@ -1098,7 +1098,7 @@ func (a *API) createWallet(w http.ResponseWriter, r *http.Request) *ServerRespon
 		return RespondWithError(nil, "wallet type is required", http.StatusBadRequest, &tracingContext)
 	}
 
-	wallet := &model.UserWallet{
+	wallet := &model.Wallet{
 		Currency:         walletType,
 		AvailableBalance: 0,
 		PendingBalance:   0,

@@ -75,3 +75,17 @@ type Exchange struct {
 	CreatedAt                time.Time     `bson:"created_at" json:"created_at"`
 	UpdatedAt                time.Time     `bson:"updated_at" json:"updated_at"`
 }
+
+type UpdateWallet struct {
+	Amount   float32 `bson:"amount" json:"amount"`
+	Currency string  `bson:"currency" json:"currency"`
+	Owner    string  `bson:"owner" json:"owner"`
+}
+
+type Wallet struct {
+	Currency         string    `bson:"currency" json:"currency"`                   // NGN, USD BSD
+	AvailableBalance float32   `bson:"available_balance" json:"available_balance"` // BaseAmount that can be withdrawn
+	PendingBalance   float32   `bson:"pending_balance" json:"pending_balance"`     // BaseAmount tied up in transactions
+	TotalVolume      float32   `bson:"total_volume" json:"total_volume"`           // Total BaseAmount transacted with this wallet. Might not be necessary
+	CreatedAt        time.Time `bson:"created_at" json:"created_at"`               // Date the wallet was created
+}

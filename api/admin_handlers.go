@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"github.com/go-chi/chi"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
 	"github.com/isongjosiah/work/onepurse-api/tracing"
@@ -85,9 +86,82 @@ func (a *API) transactionResponseAction(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *API) walletAction(w http.ResponseWriter, r *http.Request) *ServerResponse {
-	return nil
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	ID := chi.URLParam(r, "ID")
+	action := r.URL.Query().Get("action")
+	var walletUpdate model.UpdateWallet
+	var err error
+
+	if err := decodeJSONBody(&tracingContext, r.Body, &walletUpdate); err != nil {
+		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+	}
+
+	incQuery := bson.D{{"$inc", bson.D{
+		{fmt.Sprintf("wallet.%s.available_deposit", walletUpdate.Currency), walletUpdate.Amount},
+	}}}
+
+	decQuery := bson.D{{"$inc", bson.D{
+		{fmt.Sprintf("wallet.%s.available_deposit", walletUpdate.Currency), -walletUpdate.Amount},
+	}}}
+
+	if walletUpdate.Owner == types.USER {
+		switch action {
+		case types.DEPOSIT:
+			err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), ID, incQuery)
+
+		case types.WITHDRAW:
+			err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), ID, decQuery)
+		}
+	} else if walletUpdate.Owner == types.AGENT {
+		switch action {
+		case types.DEPOSIT:
+			err = a.Deps.DAL.AgentDAL.Update(context.TODO(), ID, incQuery)
+
+		case types.WITHDRAW:
+			err = a.Deps.DAL.AgentDAL.Update(context.TODO(), ID, decQuery)
+		}
+	}
+
+	if err != nil {
+		return RespondWithError(err, "unable to carry out wallet action", http.StatusInternalServerError, &tracingContext)
+	}
+
+	response := map[string]interface{}{
+		"message": "wallet action performed successfully",
+	}
+
+	return &ServerResponse{
+		Payload: response,
+	}
 }
 
 func (a *API) adminCreateAgent(w http.ResponseWriter, r *http.Request) *ServerResponse {
-	return nil
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	var agent model.Agent
+
+	if agent.Name == "" {
+		return RespondWithError(nil, "agent name is required", http.StatusBadRequest, &tracingContext)
+	}
+	if agent.Address == "" {
+		return RespondWithError(nil, "agent address is required", http.StatusBadRequest, &tracingContext)
+	}
+	if agent.IDImage == "" || agent.IDNumber == "" || agent.IDType == "" {
+		return RespondWithError(nil, "agent id information is required", http.StatusBadRequest, &tracingContext)
+	}
+
+	if err := decodeJSONBody(&tracingContext, r.Body, &agent); err != nil {
+		return RespondWithError(nil, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
+	}
+	err := a.Deps.DAL.AgentDAL.Add(context.TODO(), &agent)
+	if err != nil {
+		return RespondWithError(err, "Unable to create agent", http.StatusInternalServerError, &tracingContext)
+	}
+
+	response := map[string]interface{}{
+		"message": "agent created successfully",
+	}
+
+	return &ServerResponse{
+		Payload: response,
+	}
 }
