@@ -55,7 +55,11 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) *ServerResp
 	if err := decodeJSONBody(&tracingContext, r.Body, &password); err != nil {
 		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
 	}
-	password.AccessToken = strings.Split(r.Header.Get("Authorization"), " ")[1]
+	authorization := strings.Split(r.Header.Get("Authorization"), " ")[1]
+	if authorization == "" {
+		return RespondWithError(nil, "Unauthorized", http.StatusUnauthorized, &tracingContext)
+	}
+	password.AccessToken = authorization
 
 	if password.PreviousPassword == "" {
 		return RespondWithError(nil, "Previous password is required", http.StatusBadRequest, &tracingContext)
@@ -95,7 +99,7 @@ func (a *API) transactionPasswordActions(w http.ResponseWriter, r *http.Request)
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
 	user, err := a.Deps.DAL.UserDAL.FindByID(context.TODO(), userID)
 	if err != nil {
-		return RespondWithError(err, "could not find utemp", http.StatusBadRequest, &tracingContext)
+		return RespondWithError(err, "could not find user", http.StatusBadRequest, &tracingContext)
 	}
 
 	switch action {
@@ -177,7 +181,8 @@ func (a *API) updateUserName(w http.ResponseWriter, r *http.Request) *ServerResp
 	userID := chi.URLParam(r, "userID")
 
 	if err := decodeJSONBody(&tracingContext, r.Body, &param); err != nil {
-		return RespondWithError(nil, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+		fmt.Println(err)
+		return RespondWithError(err, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
 	}
 
 	if param.AccessToken == "" {
@@ -205,14 +210,14 @@ func (a *API) updateUserName(w http.ResponseWriter, r *http.Request) *ServerResp
 		}
 	}
 
-	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, bson.D{{"username", param.PreferredUsername}})
+	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, bson.D{{"$set", bson.D{{"username", param.PreferredUsername}}}})
 	if err != nil {
 		return RespondWithError(err, "Failed to update user name", http.StatusInternalServerError, &tracingContext)
 
 	}
 
 	response := map[string]interface{}{
-		"message": "transaction password updated",
+		"message": "transaction username updated successfully",
 	}
 
 	return &ServerResponse{Payload: response}

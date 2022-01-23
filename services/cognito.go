@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	cognito "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
@@ -181,6 +182,7 @@ func (c CognitoService) ChangePassword(p *model.ChangePassword) (bool, error) {
 	}
 	_, err := c.cognitoClient.ChangePassword(context.TODO(), params)
 	if err != nil {
+		fmt.Println("[Cognito]: error changing password", err)
 		return false, err
 	}
 	return true, nil

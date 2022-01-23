@@ -99,7 +99,7 @@ func (u UserDAL) FindByUsername(ctx context.Context, username string) (*model.Us
 
 	err := u.Collection.FindOne(ctx, bson.M{
 		"$or": []bson.M{
-			{"user_name": username},
+			{"username": username},
 			{"email": username},
 		},
 	}).Decode(&user)
@@ -118,11 +118,11 @@ func (u UserDAL) FindByUsername(ctx context.Context, username string) (*model.Us
 func (u UserDAL) UpdateUser(ctx context.Context, userID string, updateParam bson.D) error {
 	result, err := u.Collection.UpdateByID(ctx, userID, updateParam)
 	if err != nil {
-		logrus.Fatalf("[Mongo]: error updating user %s : %s", userID, err.Error())
+		logrus.Errorf("[Mongo]: error updating user %s : %s", userID, err.Error())
 		return err
 	}
 	if result.MatchedCount == 0 {
-		logrus.Fatalf("[Mongo]: error updating user %s : user record not found", userID)
+		logrus.Errorf("[Mongo]: error updating user %s : user record not found", userID)
 		return errors.New("user record not found")
 	}
 	return nil

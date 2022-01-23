@@ -19,7 +19,6 @@ func (a *API) AuthRoutes(router *chi.Mux) http.Handler {
 	router.Method("POST", "/confirm_signup", Handler(a.confirmSignUp))
 	router.Method("POST", "/reset_password", Handler(a.resetPassword))
 	router.Method("POST", "/confirm_password", Handler(a.confirmPassword))
-	router.Method("POST", "/change_password", Handler(a.changePassword))
 	router.Method("POST", "/resend_code", Handler(a.resendCode))
 
 	return router
