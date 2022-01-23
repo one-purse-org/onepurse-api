@@ -5,28 +5,28 @@ import (
 )
 
 type User struct {
-	ID                  string                `bson:"_id, omitempty" json:"id,omitempty"`
-	FullName            string                `bson:"full_name, omitempty" json:"full_name,omitempty"`
-	UserName            string                `bson:"username, omitempty" json:"username,omitempty"`
-	PhoneNumber         string                `bson:"phone_number, omitempty" json:"phone_number,omitempty"`
-	Email               string                `bson:"email, omitempty" json:"email,omitempty"`
-	TransactionPassword string                `bson:"transaction_password" json:"transaction_password,omitempty"`
-	Wallet              map[string]UserWallet `bson:"wallet, omitempty" json:"wallet,omitempty"` // a map of wallet with the keys representing the currency and the value the wallet info for that currency
-	PlaidAccessToken    string                `bson:"plaid_access_token, omitempty" json:"plaid_access_token,omitempty"`
-	Location            string                `bson:"location, omitempty" json:"location,omitempty"`
-	Nationality         string                `bson:"nationality, omitempty" json:"nationality,omitempty"`
-	DateOfBirth         string                `bson:"date_of_birth, omitempty" json:"date_of_birth,omitempty"`
-	Gender              string                `json:"gender,omitempty" bson:"gender, omitempty"`
-	Avatar              string                `bson:"avatar, omitempty" json:"avatar,omitempty"`
-	IDType              string                `bson:"id_type, omitempty" json:"id_type,omitempty"`
-	IDNumber            string                `bson:"id_number, omitempty" json:"id_number,omitempty"`
-	IDExpiryDate        string                `bson:"id_expiry_date, omitempty" json:"id_expiry_date,omitempty"`
-	PreferredCurrency   []PreferredCurrency   `bson:"preferred_currency, omitempty" json:"preferred_currency,omitempty"`
-	IDImage             string                `bson:"id_image, omitempty" json:"id_image,omitempty"`
-	IsIDVerified        bool                  `bson:"is_id_verified, omitempty" json:"is_id_verified,omitempty"`
-	CreatedAt           time.Time             `bson:"created_at, omitempty" json:"created_at,omitempty"`
-	DeviceToken         string                `bson:"device_token, omitempty" json:"device_token,omitempty"`
-	Active              bool                  `bson:"active, omitempty" json:"active,omitempty"`
+	ID                  string              `bson:"_id, omitempty" json:"id,omitempty"`
+	FullName            string              `bson:"full_name, omitempty" json:"full_name,omitempty"`
+	UserName            string              `bson:"username, omitempty" json:"username,omitempty"`
+	PhoneNumber         string              `bson:"phone_number, omitempty" json:"phone_number,omitempty"`
+	Email               string              `bson:"email, omitempty" json:"email,omitempty"`
+	TransactionPassword string              `bson:"transaction_password" json:"transaction_password,omitempty"`
+	Wallet              map[string]Wallet   `bson:"wallet, omitempty" json:"wallet,omitempty"` // a map of wallet with the keys representing the currency and the value the wallet info for that currency
+	PlaidAccessToken    string              `bson:"plaid_access_token, omitempty" json:"plaid_access_token,omitempty"`
+	Location            string              `bson:"location, omitempty" json:"location,omitempty"`
+	Nationality         string              `bson:"nationality, omitempty" json:"nationality,omitempty"`
+	DateOfBirth         string              `bson:"date_of_birth, omitempty" json:"date_of_birth,omitempty"`
+	Gender              string              `json:"gender,omitempty" bson:"gender, omitempty"`
+	Avatar              string              `bson:"avatar, omitempty" json:"avatar,omitempty"`
+	IDType              string              `bson:"id_type, omitempty" json:"id_type,omitempty"`
+	IDNumber            string              `bson:"id_number, omitempty" json:"id_number,omitempty"`
+	IDExpiryDate        string              `bson:"id_expiry_date, omitempty" json:"id_expiry_date,omitempty"`
+	PreferredCurrency   []PreferredCurrency `bson:"preferred_currency, omitempty" json:"preferred_currency,omitempty"`
+	IDImage             string              `bson:"id_image, omitempty" json:"id_image,omitempty"`
+	IsIDVerified        bool                `bson:"is_id_verified, omitempty" json:"is_id_verified,omitempty"`
+	CreatedAt           time.Time           `bson:"created_at, omitempty" json:"created_at,omitempty"`
+	DeviceToken         string              `bson:"device_token, omitempty" json:"device_token,omitempty"`
+	Active              bool                `bson:"active, omitempty" json:"active,omitempty"`
 }
 
 type UpdateKYCInfo struct {
@@ -46,13 +46,6 @@ type UpdateUserInfo struct {
 	Email       string `bson:"email, omitempty" json:"email,omitempty"`
 }
 
-type UserWallet struct {
-	Currency         string    `bson:"currency" json:"currency"`                   // NGN, USD BSD
-	AvailableBalance float32   `bson:"available_balance" json:"available_balance"` // BaseAmount that can be withdrawn
-	PendingBalance   float32   `bson:"pending_balance" json:"pending_balance"`     // BaseAmount tied up in transactions
-	TotalVolume      float32   `bson:"total_volume" json:"total_volume"`           // Total BaseAmount transacted with this wallet. Might not be necessary
-	CreatedAt        time.Time `bson:"created_at" json:"created_at"`               // Date the wallet was created
-}
 type PreferredCurrency struct {
 	Label string `bson:"slug" json:"label"`
 	Slug  string `bson:"slug" json:"slug"`

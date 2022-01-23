@@ -13,19 +13,19 @@ type Withdrawal struct {
 }
 
 type Transfer struct {
-	ID             string        `bson:"_id" json:"id"`
-	User           *User         `bson:"user" json:"user"`
-	BaseAmount     float32       `bson:"base_amount" json:"base_amount"`
-	BaseCurrency   string        `bson:"base_currency" json:"base_currency"`
-	AmountSent     float32       `bson:"amount_sent" json:"amount_sent"`
-	ConvCurrency   string        `bson:"conv_currency" json:"conv_currency"`
-	PaymentChannel string        `bson:"payment_channel" json:"payment_channel"`
-	AgentAccount   *AgentAccount `bson:"agent_account" json:"agent_account"`
-	UserReceipt    string        `bson:"user_receipt" json:"user_receipt"`
-	AgentReceipt   string        `bson:"agent_receipt" json:"agent_receipt"`
-	CreatedAt      time.Time     `bson:"created_at" json:"created_at"`
-	UpdatedAt      time.Time     `bson:"updated_at" json:"updated_at"`
-	Status         string        `bson:"status" json:"status"` // pending, completed, cancelled
+	ID             string    `bson:"_id" json:"id"`
+	User           *User     `bson:"user" json:"user"`
+	BaseAmount     float32   `bson:"base_amount" json:"base_amount"`
+	BaseCurrency   string    `bson:"base_currency" json:"base_currency"`
+	AmountSent     float32   `bson:"amount_sent" json:"amount_sent"`
+	ConvCurrency   string    `bson:"conv_currency" json:"conv_currency"`
+	PaymentChannel string    `bson:"payment_channel" json:"payment_channel"`
+	AgentAccount   *Account  `bson:"agent_account" json:"agent_account"`
+	UserReceipt    string    `bson:"user_receipt" json:"user_receipt"`
+	AgentReceipt   string    `bson:"agent_receipt" json:"agent_receipt"`
+	CreatedAt      time.Time `bson:"created_at" json:"created_at"`
+	UpdatedAt      time.Time `bson:"updated_at" json:"updated_at"`
+	Status         string    `bson:"status" json:"status"` // pending, completed, cancelled
 }
 
 //OnePurseTransaction refers to transfer between one purse users
@@ -42,36 +42,54 @@ type OnePurseTransaction struct {
 }
 
 type Deposit struct {
-	ID             string        `bson:"_id" json:"id"`
-	User           *User         `bson:"user" json:"user"`
-	BaseCurrency   string        `bson:"base_currency" json:"base_currency"`
-	BaseAmount     float32       `bson:"amount" json:"amount"`
-	PaymentChannel string        `bson:"payment_channel" json:"payment_channel"`
-	UserReceipt    string        `bson:"user_receipt" json:"user_receipt"`
-	AgentAccount   *AgentAccount `bson:"agent_account" json:"agent_account"`
-	CreatedAt      time.Time     `bson:"created_at" json:"created_at"`
-	UpdatedAt      time.Time     `bson:"updated_at" json:"updated_at"`
-	Status         string        `bson:"status" json:"status"`
+	ID             string    `bson:"_id" json:"id"`
+	User           *User     `bson:"user" json:"user"`
+	BaseCurrency   string    `bson:"base_currency" json:"base_currency"`
+	BaseAmount     float32   `bson:"amount" json:"amount"`
+	PaymentChannel string    `bson:"payment_channel" json:"payment_channel"`
+	UserReceipt    string    `bson:"user_receipt" json:"user_receipt"`
+	AgentAccount   *Account  `bson:"agent_account" json:"agent_account"`
+	CreatedAt      time.Time `bson:"created_at" json:"created_at"`
+	UpdatedAt      time.Time `bson:"updated_at" json:"updated_at"`
+	Status         string    `bson:"status" json:"status"`
 }
 
 type Exchange struct {
-	ID                       string        `bson:"_id" json:"id"`
-	User                     *User         `bson:"user" json:"user"`
-	BaseCurrency             string        `bson:"base_currency" json:"base_currency"`
-	BaseAmount               float32       `bson:"base_amount" json:"base_amount"`
-	ExchangeCurrency         string        `bson:"exchange_currency" json:"exchange_currency"`
-	ExchangeAmount           float32       `bson:"exchange_amount" json:"exchange_amount"`
-	IsCryptoExchange         bool          `bson:"is_crypto_exchange" json:"is_crypto_exchange"`
-	BlockchainChannel        string        `bson:"blockchain_channel" json:"blockchain_channel"`
-	CryptoWalletAddress      string        `bson:"crypto_wallet_address" json:"crypto_wallet_address"`
-	PaymentChannel           string        `bson:"payment_channel" json:"payment_channel"`
-	AgentAccount             *AgentAccount `bson:"agent_account" json:"agent_account"`
-	UserReceipt              string        `bson:"user_receipt" json:"user_receipt"`
-	AgentReceipt             string        `bson:"agent_receipt" json:"agent_receipt"`
-	UserReasonForCancelling  string        `bson:"reason_for_cancelling" json:"reason_for_cancelling"`
-	AgentReasonForCancelling string        `bson:"agent_reason_for_cancelling" json:"agent_reason_for_cancelling"`
-	ReasonForDispute         string        `bson:"reason_for_dispute" json:"reason_for_dispute"`
-	Status                   string        `bson:"status" json:"status"`
-	CreatedAt                time.Time     `bson:"created_at" json:"created_at"`
-	UpdatedAt                time.Time     `bson:"updated_at" json:"updated_at"`
+	ID                       string    `bson:"_id" json:"id"`
+	User                     *User     `bson:"user" json:"user"`
+	BaseCurrency             string    `bson:"base_currency" json:"base_currency"`
+	BaseAmount               float32   `bson:"base_amount" json:"base_amount"`
+	ExchangeCurrency         string    `bson:"exchange_currency" json:"exchange_currency"`
+	ExchangeAmount           float32   `bson:"exchange_amount" json:"exchange_amount"`
+	IsCryptoExchange         bool      `bson:"is_crypto_exchange" json:"is_crypto_exchange"`
+	BlockchainChannel        string    `bson:"blockchain_channel" json:"blockchain_channel"`
+	CryptoWalletAddress      string    `bson:"crypto_wallet_address" json:"crypto_wallet_address"`
+	PaymentChannel           string    `bson:"payment_channel" json:"payment_channel"`
+	AgentAccount             *Account  `bson:"agent_account" json:"agent_account"`
+	UserReceipt              string    `bson:"user_receipt" json:"user_receipt"`
+	AgentReceipt             string    `bson:"agent_receipt" json:"agent_receipt"`
+	UserReasonForCancelling  string    `bson:"reason_for_cancelling" json:"reason_for_cancelling"`
+	AgentReasonForCancelling string    `bson:"agent_reason_for_cancelling" json:"agent_reason_for_cancelling"`
+	ReasonForDispute         string    `bson:"reason_for_dispute" json:"reason_for_dispute"`
+	Status                   string    `bson:"status" json:"status"`
+	CreatedAt                time.Time `bson:"created_at" json:"created_at"`
+	UpdatedAt                time.Time `bson:"updated_at" json:"updated_at"`
+}
+
+type Wallet struct {
+	Currency         string    `bson:"currency" json:"currency"`                   // NGN, USD BSD
+	AvailableBalance float32   `bson:"available_balance" json:"available_balance"` // BaseAmount that can be withdrawn
+	PendingBalance   float32   `bson:"pending_balance" json:"pending_balance"`     // BaseAmount tied up in transactions
+	TotalVolume      float32   `bson:"total_volume" json:"total_volume"`           // Total BaseAmount transacted with this wallet. Might not be necessary
+	CreatedAt        time.Time `bson:"created_at" json:"created_at"`               // Date the wallet was created
+}
+
+type Account struct {
+	ID            string `bson:"_id" json:"id"`
+	AgentID       string `bson:"agent_id" json:"agent_id"`
+	AccountName   string `bson:"account_name" json:"account_name"`
+	AccountNumber string `bson:"account_number" json:"account_number"`
+	BankName      string `bson:"bank_name" json:"bank_name"`
+	IsAgent       bool   `bson:"is_agent" json:"is_agent"`
+	IsUser        bool   `bson:"is_user" json:"is_user"`
 }
