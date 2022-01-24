@@ -185,10 +185,7 @@ func (a *API) updateUserName(w http.ResponseWriter, r *http.Request) *ServerResp
 		return RespondWithError(err, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
 	}
 
-	if param.AccessToken == "" {
-		return RespondWithError(nil, "access_token is required", http.StatusBadRequest, &tracingContext)
-
-	}
+	param.AccessToken = strings.Split(r.Header.Get("Authorization"), " ")[1]
 	if param.PreferredUsername == "" {
 		return RespondWithError(nil, "preferred_username is required", http.StatusBadRequest, &tracingContext)
 	}

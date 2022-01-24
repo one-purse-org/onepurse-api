@@ -13,24 +13,28 @@ import (
 )
 
 type ITransactionDAL interface {
+	CreateAccount(ctx context.Context, account *model.Account) error
 	CreateTransfer(ctx context.Context, transfer *model.Transfer) error
 	CreateWithdrawal(ctx context.Context, withdrawal *model.Withdrawal) error
 	CreateDeposit(ctx context.Context, deposit *model.Deposit) error
 	CreateExchange(ctx context.Context, exchange *model.Exchange) error
 	CreateOnePurseTransaction(ctx context.Context, transaction *model.OnePurseTransaction) error
 
+	GetAccount(ctx context.Context, query bson.D) (*model.Account, error)
 	GetTransferByID(ctx context.Context, transferID string) (*model.Transfer, error)
 	GetWithdrawalByID(ctx context.Context, withdrawalID string) (*model.Withdrawal, error)
 	GetDepositByID(ctx context.Context, depositID string) (*model.Deposit, error)
 	GetExchangeByID(ctx context.Context, exchangeID string) (*model.Exchange, error)
 	GetOnePurseTransactionByID(ctx context.Context, transactionID string) (*model.OnePurseTransaction, error)
 
+	UpdateAccount(ctx context.Context, accountID string, updateParam bson.D) error
 	UpdateTransfer(ctx context.Context, transferID string, updateParam bson.D) error
 	UpdateWithdrawal(ctx context.Context, withdrawalID string, updateParam bson.D) error
 	UpdateDeposit(ctx context.Context, depositID string, updateParam bson.D) error
 	UpdateExchange(ctx context.Context, exchangeID string, updateParam bson.D) error
 	UpdateOnePurseTransaction(ctx context.Context, transactionID string, updateParam bson.D) error
 
+	FetchAccounts(ctx context.Context, query bson.D) (*[]model.Account, error)
 	FetchTransfers(ctx context.Context, query bson.D) (*[]model.Transfer, error)
 	FetchWithdrawals(ctx context.Context, query bson.D) (*[]model.Withdrawal, error)
 	FetchDeposits(ctx context.Context, query bson.D) (*[]model.Deposit, error)
@@ -46,6 +50,7 @@ type TransactionDAL struct {
 	DepositCollection             *mongo.Collection
 	ExchangeCollection            *mongo.Collection
 	OnePurseTransactionCollection *mongo.Collection
+	AccountCollection             *mongo.Collection
 }
 
 func NewTransactionDAL(db *mongo.Database) *TransactionDAL {
@@ -56,7 +61,20 @@ func NewTransactionDAL(db *mongo.Database) *TransactionDAL {
 		DepositCollection:             db.Collection("deposit"),
 		ExchangeCollection:            db.Collection("exchange"),
 		OnePurseTransactionCollection: db.Collection("one-purse-transaction"),
+		AccountCollection:             db.Collection("account"),
 	}
+}
+
+// CreateAccount creates a database record of a user or agent bank account
+func (t TransactionDAL) CreateAccount(ctx context.Context, account *model.Account) error {
+	_, err := t.AccountCollection.InsertOne(ctx, account)
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return errors.New("Account record already exists. You might be duplicating an account")
+		}
+		return err
+	}
+	return nil
 }
 
 func (t TransactionDAL) CreateTransfer(ctx context.Context, transfer *model.Transfer) error {
@@ -112,6 +130,21 @@ func (t TransactionDAL) CreateOnePurseTransaction(ctx context.Context, transacti
 		return err
 	}
 	return nil
+}
+
+// GetAccount fetches bank account information based on the specified query parameters ...
+func (t TransactionDAL) GetAccount(ctx context.Context, query bson.D) (*model.Account, error) {
+	var account *model.Account
+	err := t.AccountCollection.FindOne(ctx, query).Decode(account)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			findErr := fmt.Sprintf("no account matches specified query: %s", query)
+			return nil, errors.New(findErr)
+		}
+		return nil, err
+	}
+	return account, nil
 }
 
 func (t TransactionDAL) GetTransferByID(ctx context.Context, transferID string) (*model.Transfer, error) {
@@ -183,6 +216,22 @@ func (t TransactionDAL) GetOnePurseTransactionByID(ctx context.Context, transact
 	}
 
 	return transaction, nil
+}
+
+// FetchAccounts fetches a list of account based on the specified query ...
+func (t TransactionDAL) FetchAccounts(ctx context.Context, query bson.D) (*[]model.Account, error) {
+	var account []model.Account
+
+	cursor, err := t.AccountCollection.Find(ctx, query)
+	if err != nil {
+		logrus.Errorf("[Mongo]: error fetching accounts: %s", err.Error())
+		return nil, err
+	}
+	if err = cursor.All(ctx, &account); err != nil {
+		logrus.Errorf("[Mongo]: error decoding account results: %s", err.Error())
+		return nil, err
+	}
+	return &account, nil
 }
 
 func (t TransactionDAL) FetchTransfers(ctx context.Context, query bson.D) (*[]model.Transfer, error) {
@@ -261,10 +310,24 @@ func (t TransactionDAL) FetchOnePurseTransactions(ctx context.Context, query bso
 	return &transactions, nil
 }
 
+//UpdateAccount updates an account information ...
+func (t TransactionDAL) UpdateAccount(ctx context.Context, accountID string, updateParam bson.D) error {
+	result, err := t.AccountCollection.UpdateByID(ctx, accountID, updateParam)
+	if err != nil {
+		logrus.Errorf("[Mongo]: error updating account %s information: %s", accountID, err.Error())
+		return err
+	}
+	if result.MatchedCount == 0 {
+		logrus.Errorf("[Mongo]: error updating account %s information: account record not found", accountID)
+		return errors.New("account record not found")
+	}
+	return nil
+}
+
 func (t TransactionDAL) UpdateTransfer(ctx context.Context, transferID string, updateParam bson.D) error {
 	result, err := t.TransferCollection.UpdateByID(ctx, transferID, updateParam)
 	if err != nil {
-		logrus.Fatalf("[Mongo]: error updating transfer %s: %s", transferID, err.Error())
+		logrus.Errorf("[Mongo]: error updating transfer %s: %s", transferID, err.Error())
 		return err
 	}
 	if result.MatchedCount == 0 {
