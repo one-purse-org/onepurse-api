@@ -961,6 +961,9 @@ func (a *API) generateOTPToken(w http.ResponseWriter, r *http.Request) *ServerRe
 	}
 
 	// Send OTP token to user
+	if user.PhoneNumber == "" {
+		return RespondWithError(nil, "Please update phone number on profile screen", http.StatusBadRequest, &tracingContext)
+	}
 	msg := fmt.Sprintf("Here is your OTP for changing your transaction password: %s. It expires in %s", token, time.Now().Add(30*time.Second))
 	err = a.Deps.TWILIO.SendMessage(user.PhoneNumber, msg)
 	if err != nil {
