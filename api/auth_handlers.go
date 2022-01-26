@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/aws/smithy-go"
 	"github.com/go-chi/chi"
@@ -61,12 +62,21 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) *ServerResponse {
 			}
 		}
 	}
-	user, err := a.Deps.DAL.UserDAL.FindByUsername(context.TODO(), login.Username)
+	u, err := a.Deps.DAL.UserDAL.FindByUsername(context.TODO(), login.Username)
 	if err != nil {
 		return RespondWithError(err, "Failed to fetch user information", http.StatusInternalServerError, &tracingContext)
 
 	}
-	authResponse.User = user
+	data, err := json.Marshal(&u)
+	if err != nil {
+		return RespondWithError(err, "Failed to marshal user struct", http.StatusInternalServerError, &tracingContext)
+	}
+
+	var user model.UserAuthResp
+	if err := json.Unmarshal(data, &user); err != nil {
+		return RespondWithError(err, "Failed to unmarshal user json", http.StatusInternalServerError, &tracingContext)
+	}
+	authResponse.User = &user
 
 	return &ServerResponse{Payload: authResponse}
 }

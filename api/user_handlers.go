@@ -122,7 +122,7 @@ func (a *API) transactionPasswordActions(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			return RespondWithError(err, "Failed to hash password", http.StatusInternalServerError, &tracingContext)
 		}
-		err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, bson.D{{"$set", bson.D{{"transaction_password", password}}}})
+		err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, bson.D{{"$set", bson.D{{"transaction_password", password}, {"has_transaction_password", true}}}})
 		if err != nil {
 			return RespondWithError(err, "Failed to update transaction password", http.StatusInternalServerError, &tracingContext)
 		}
