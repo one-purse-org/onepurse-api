@@ -283,11 +283,7 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) *ServerRespo
 		PhoneNumber: user.PhoneNumber,
 		Email:       user.Email,
 	}
-	doc, err := helpers.MarshalStructToBSONDoc(temp)
-	if err != nil {
-		return RespondWithWarning(err, "unable to marshal to mongo document", http.StatusInternalServerError, &tracingContext)
-	}
-	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, doc)
+	err := a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userID, bson.D{{"$set", bson.D{{"phone_number", temp.PhoneNumber}}}})
 	if err != nil {
 		return RespondWithError(err, "failed to update profile", http.StatusInternalServerError, &tracingContext)
 	}
