@@ -128,12 +128,29 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	}
 
 	user := &model.User{
-		ID:           cuid.New(),
-		FullName:     registration.FullName,
-		Email:        registration.Email,
-		CreatedAt:    time.Now(),
-		Active:       true,
-		IsIDVerified: false,
+		ID:                     cuid.New(),
+		FullName:               registration.FullName,
+		UserName:               "",
+		PhoneNumber:            "",
+		Email:                  registration.Email,
+		TransactionPassword:    "",
+		HasTransactionPassword: false,
+		Wallet:                 map[string]model.Wallet{},
+		PlaidAccessToken:       "",
+		Location:               "",
+		Nationality:            "",
+		DateOfBirth:            "",
+		Gender:                 "",
+		Avatar:                 "",
+		IDType:                 "",
+		IDNumber:               "",
+		IDExpiryDate:           "",
+		PreferredCurrency:      []model.PreferredCurrency{},
+		IDImage:                "",
+		IsIDVerified:           false,
+		CreatedAt:              time.Now(),
+		DeviceToken:            "",
+		Active:                 true,
 	}
 
 	err = a.Deps.DAL.UserDAL.Add(context.TODO(), user)

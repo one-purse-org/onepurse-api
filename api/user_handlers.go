@@ -32,7 +32,7 @@ func (a *API) UserRoutes() http.Handler {
 
 	// Transaction Routes
 	router.Method("POST", "/{userID}/transaction", Handler(a.createTransaction))
-	router.Method("PUT", "/transaction/{transactionID}/", Handler(a.updateTransaction))
+	router.Method("PATCH", "/transaction/{transactionID}/", Handler(a.updateTransaction))
 	router.Method("GET", "/{userID}/transaction", Handler(a.getTransaction))
 	router.Method("GET", "/transaction/{transactionID}/get_agent", Handler(a.getAgentForTransaction))
 
@@ -42,6 +42,7 @@ func (a *API) UserRoutes() http.Handler {
 
 	// Wallet Routes
 	router.Method("POST", "/{userID}/wallet", Handler(a.createWallet))
+	router.Method("PATCH", "/{userID}/wallet", Handler(a.updateWallet))
 	router.Method("GET", "/{userID}/wallet", Handler(a.getWalletTransaction))
 	return router
 }
@@ -1008,25 +1009,82 @@ func (a *API) createWallet(w http.ResponseWriter, r *http.Request) *ServerRespon
 		return RespondWithError(nil, "wallet type is required", http.StatusBadRequest, &tracingContext)
 	}
 
-	wallet := &model.Wallet{
+	user, err := a.Deps.DAL.UserDAL.FindByID(context.TODO(), userId)
+	if err != nil {
+		return RespondWithError(err, "unable to fetch user", http.StatusInternalServerError, &tracingContext)
+	}
+
+	wallet := model.Wallet{
 		Currency:         walletType,
 		AvailableBalance: 0,
 		PendingBalance:   0,
 		TotalVolume:      0,
 		CreatedAt:        time.Now(),
 	}
-	doc, err := helpers.MarshalStructToBSONDoc(wallet)
-	if err != nil {
-		return RespondWithError(err, "unable to marshall to mongo document", http.StatusInternalServerError, &tracingContext)
+
+	if len(user.Wallet) == 0 {
+		data := map[string]model.Wallet{
+			walletType: wallet,
+		}
+		doc, err := helpers.MarshalStructToBSONDoc(data)
+		if err != nil {
+			return RespondWithError(err, "unable to marshall to mongo document", http.StatusInternalServerError, &tracingContext)
+		}
+
+		err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userId, bson.D{{"$set", bson.D{{
+			"wallet", doc}}}})
+	} else {
+		doc, err := helpers.MarshalStructToBSONDoc(wallet)
+		if err != nil {
+			return RespondWithError(err, "unable to marshall to mongo document", http.StatusInternalServerError, &tracingContext)
+		}
+
+		err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userId, bson.D{{"$set", bson.D{{
+			fmt.Sprintf("wallet.%s", walletType), doc}}}})
 	}
-	err = a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userId, bson.D{{"$set", bson.D{{
-		fmt.Sprintf("wallet.%s", walletType), doc}}}})
+
 	if err != nil {
 		return RespondWithError(err, "unable to create wallet", http.StatusInternalServerError, &tracingContext)
 	}
 
 	response := map[string]interface{}{
 		"message": fmt.Sprintf("successfully created %s wallet", walletType),
+	}
+
+	return &ServerResponse{
+		Payload: response,
+	}
+}
+
+func (a *API) updateWallet(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	walletType := r.URL.Query().Get("wallet-type")
+	action := r.URL.Query().Get("action")
+	userId := chi.URLParam(r, "userID")
+
+	if walletType == "" {
+		return RespondWithError(nil, "wallet type is required", http.StatusBadRequest, &tracingContext)
+	}
+
+	switch action {
+	case types.DEACTIVATE:
+		err := a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userId, bson.D{{"$set", bson.D{{
+			fmt.Sprintf("wallet.%s.is_active", walletType), false}}}})
+		if err != nil {
+			return RespondWithError(err, "unable to deactivate wallet", http.StatusInternalServerError, &tracingContext)
+		}
+	case types.ACTIVATE:
+		err := a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), userId, bson.D{{"$set", bson.D{{
+			fmt.Sprintf("wallet.%s.is_active", walletType), true}}}})
+		if err != nil {
+			return RespondWithError(err, "unable to deactivate wallet", http.StatusInternalServerError, &tracingContext)
+		}
+	default:
+		return RespondWithError(nil, "this action does not exist", http.StatusBadRequest, &tracingContext)
+	}
+
+	response := map[string]interface{}{
+		"message": fmt.Sprintf("successfully updated %s wallet", walletType),
 	}
 
 	return &ServerResponse{
