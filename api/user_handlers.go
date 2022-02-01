@@ -1019,6 +1019,7 @@ func (a *API) createWallet(w http.ResponseWriter, r *http.Request) *ServerRespon
 		AvailableBalance: 0,
 		PendingBalance:   0,
 		TotalVolume:      0,
+		IsActive:         true,
 		CreatedAt:        time.Now(),
 	}
 
