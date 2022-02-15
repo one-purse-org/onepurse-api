@@ -11,6 +11,7 @@ import (
 type DAL struct {
 	Client          *mongo.Client
 	DB              *mongo.Database
+	AdminDAL        IAdminDAL
 	UserDAL         IUserDAL
 	CurrencyDAL     ICurrencyDAL
 	TransactionDAL  ITransactionDAL
@@ -32,6 +33,7 @@ func (d *DAL) setupDALObjects(cfg *config.Config) error {
 	}
 
 	d.Client = client
+	d.AdminDAL = NewAdminDAL(d.DB)
 	d.UserDAL = NewUserDAL(d.DB)
 	d.CurrencyDAL = NewCurrencyDAL(d.DB)
 	d.TransactionDAL = NewTransactionDAL(d.DB)

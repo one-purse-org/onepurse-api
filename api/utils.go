@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+//CreateNotification creates a user notification entry in the database and fires an AWS SNS message to the device endpoint
 func (a *API) CreateNotification(ctx context.Context, userID, title, message, infoType, deviceToken string, infoData interface{}) error {
 	// Create in database
 	notification := &model.UserNotification{
@@ -31,4 +32,37 @@ func (a *API) CreateNotification(ctx context.Context, userID, title, message, in
 		return errors.Wrapf(err, "unable to send push notification")
 	}
 	return nil
+}
+
+// GetNumberMetrics fetches all the information required for the NumberMetrics struct
+func (a *API) GetNumberMetrics(ctx context.Context) (*model.NumberMetrics, error) {
+	numUser, err := a.Deps.DAL.UserDAL.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+	numAgent, err := a.Deps.DAL.AgentDAL.Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+	numTransaction, err := a.Deps.DAL.TransactionDAL.CountAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	metrics := model.NumberMetrics{
+		NumberOfUser:        numUser,
+		NumberOfAgent:       numAgent,
+		NumberOfTransaction: numTransaction,
+	}
+	return &metrics, nil
+}
+
+// GetCurrencyMetrics fetches all the information required for the CurrencyMetrics struct
+func (a *API) GetCurrencyMetrics(ctx context.Context) (*model.CurrencyMetrics, error) {
+	return nil, nil
+}
+
+// TransactionVolumeMetrics fetches all the information required for the transactionMetrics struct
+func (a *API) TransactionVolumeMetrics(ctx context.Context, start, end time.Time) (*model.TransactionVolumeMetrics, error) {
+	return nil, nil
 }

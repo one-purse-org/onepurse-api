@@ -16,6 +16,7 @@ type IAgentDAL interface {
 	FindAll(ctx context.Context, query bson.D) (*[]model.Agent, error)
 	FindOne(ctx context.Context, query bson.D) (*model.Agent, error)
 	Update(ctx context.Context, agentID string, updateParam bson.D) error
+	Count(ctx context.Context) (int32, error)
 }
 
 type AgentDAL struct {
@@ -85,4 +86,12 @@ func (a AgentDAL) Update(ctx context.Context, agentID string, updateParam bson.D
 		return errors.New("agent record not found")
 	}
 	return nil
+}
+
+func (a AgentDAL) Count(ctx context.Context) (int32, error) {
+	num, err := a.Collection.CountDocuments(ctx, bson.D{})
+	if err != nil {
+		return 0, err
+	}
+	return int32(num), err
 }

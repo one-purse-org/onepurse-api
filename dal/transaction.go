@@ -19,6 +19,8 @@ type ITransactionDAL interface {
 	CreateDeposit(ctx context.Context, deposit *model.Deposit) error
 	CreateExchange(ctx context.Context, exchange *model.Exchange) error
 	CreateOnePurseTransaction(ctx context.Context, transaction *model.OnePurseTransaction) error
+	CreateRate(ctx context.Context, transaction *model.Rate) error
+	CreateAdminPayment(ctx context.Context, payments *model.AdminPayment) error
 
 	GetAccount(ctx context.Context, query bson.D) (*model.Account, error)
 	GetTransferByID(ctx context.Context, transferID string) (*model.Transfer, error)
@@ -26,6 +28,8 @@ type ITransactionDAL interface {
 	GetDepositByID(ctx context.Context, depositID string) (*model.Deposit, error)
 	GetExchangeByID(ctx context.Context, exchangeID string) (*model.Exchange, error)
 	GetOnePurseTransactionByID(ctx context.Context, transactionID string) (*model.OnePurseTransaction, error)
+	GetRate(ctx context.Context) (*model.Rate, error)
+	GetAdminPayment(ctx context.Context, query bson.D) (*model.AdminPayment, error)
 
 	UpdateAccount(ctx context.Context, accountID string, updateParam bson.D) error
 	UpdateTransfer(ctx context.Context, transferID string, updateParam bson.D) error
@@ -33,6 +37,8 @@ type ITransactionDAL interface {
 	UpdateDeposit(ctx context.Context, depositID string, updateParam bson.D) error
 	UpdateExchange(ctx context.Context, exchangeID string, updateParam bson.D) error
 	UpdateOnePurseTransaction(ctx context.Context, transactionID string, updateParam bson.D) error
+	UpdateRate(ctx context.Context, updateParam bson.D) error
+	UpdateAdminPayment(ctx context.Context, ID string, updateParam bson.D) error
 
 	FetchAccounts(ctx context.Context, query bson.D) (*[]model.Account, error)
 	FetchTransfers(ctx context.Context, query bson.D) (*[]model.Transfer, error)
@@ -40,7 +46,9 @@ type ITransactionDAL interface {
 	FetchDeposits(ctx context.Context, query bson.D) (*[]model.Deposit, error)
 	FetchExchanges(ctx context.Context, query bson.D) (*[]model.Exchange, error)
 	FetchOnePurseTransactions(ctx context.Context, query bson.D) (*[]model.OnePurseTransaction, error)
+	FetchAdminPayments(ctx context.Context, query bson.D) (*[]model.AdminPayment, error)
 
+	CountAll(ctx context.Context) (int32, error)
 	CheckTimeLimit() error
 }
 type TransactionDAL struct {
@@ -51,6 +59,8 @@ type TransactionDAL struct {
 	ExchangeCollection            *mongo.Collection
 	OnePurseTransactionCollection *mongo.Collection
 	AccountCollection             *mongo.Collection
+	RateCollection                *mongo.Collection
+	AdminPaymentCollection        *mongo.Collection
 }
 
 func NewTransactionDAL(db *mongo.Database) *TransactionDAL {
@@ -62,6 +72,8 @@ func NewTransactionDAL(db *mongo.Database) *TransactionDAL {
 		ExchangeCollection:            db.Collection("exchange"),
 		OnePurseTransactionCollection: db.Collection("one-purse-transaction"),
 		AccountCollection:             db.Collection("account"),
+		RateCollection:                db.Collection("rate"),
+		AdminPaymentCollection:        db.Collection("admin-payments"),
 	}
 }
 
@@ -126,6 +138,28 @@ func (t TransactionDAL) CreateOnePurseTransaction(ctx context.Context, transacti
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return errors.New("transaction record already exists. You might be repeating a transaction")
+		}
+		return err
+	}
+	return nil
+}
+
+func (t TransactionDAL) CreateAdminPayment(ctx context.Context, payment *model.AdminPayment) error {
+	_, err := t.AdminPaymentCollection.InsertOne(ctx, payment)
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return errors.New("payment record already exists. You might be repeating a payment")
+		}
+		return err
+	}
+	return nil
+}
+
+func (t TransactionDAL) CreateRate(ctx context.Context, rate *model.Rate) error {
+	_, err := t.RateCollection.InsertOne(ctx, rate)
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return errors.New("rate record already exist. You might be duplicating a rate")
 		}
 		return err
 	}
@@ -218,6 +252,30 @@ func (t TransactionDAL) GetOnePurseTransactionByID(ctx context.Context, transact
 	return transaction, nil
 }
 
+func (t TransactionDAL) GetAdminPayment(ctx context.Context, query bson.D) (*model.AdminPayment, error) {
+	var payment *model.AdminPayment
+	err := t.AdminPaymentCollection.FindOne(ctx, query).Decode(&payment)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errors.New("record for admin payment not found")
+		}
+		return nil, err
+	}
+	return payment, nil
+}
+
+func (t TransactionDAL) GetRate(ctx context.Context) (*model.Rate, error) {
+	var rate *model.Rate
+	err := t.RateCollection.FindOne(ctx, bson.D{}).Decode(&rate)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errors.New("record for rate not found")
+		}
+		return nil, err
+	}
+	return rate, nil
+}
+
 // FetchAccounts fetches a list of account based on the specified query ...
 func (t TransactionDAL) FetchAccounts(ctx context.Context, query bson.D) (*[]model.Account, error) {
 	var account []model.Account
@@ -299,7 +357,7 @@ func (t TransactionDAL) FetchOnePurseTransactions(ctx context.Context, query bso
 
 	cursor, err := t.OnePurseTransactionCollection.Find(ctx, query)
 	if err != nil {
-		log.Fatalf("[Mongo]: error fetching transactions: %s", err.Error())
+		logrus.Errorf("[Mongo]: error fetching transactions: %s", err.Error())
 		return nil, err
 	}
 
@@ -308,6 +366,22 @@ func (t TransactionDAL) FetchOnePurseTransactions(ctx context.Context, query bso
 		return nil, err
 	}
 	return &transactions, nil
+}
+
+func (t TransactionDAL) FetchAdminPayments(ctx context.Context, query bson.D) (*[]model.AdminPayment, error) {
+	var payments []model.AdminPayment
+
+	cursor, err := t.AdminPaymentCollection.Find(ctx, query)
+	if err != nil {
+		logrus.Errorf("[Mongo]: error fetching admin payments: %s", err.Error())
+		return nil, err
+	}
+
+	if err = cursor.All(ctx, &payments); err != nil {
+		logrus.Errorf("[Mongo]: error decoding admin payment results: %s", err.Error())
+		return nil, err
+	}
+	return &payments, nil
 }
 
 //UpdateAccount updates an account information ...
@@ -385,13 +459,41 @@ func (t TransactionDAL) UpdateExchange(ctx context.Context, exchangeID string, u
 func (t TransactionDAL) UpdateOnePurseTransaction(ctx context.Context, transactionID string, updateParam bson.D) error {
 	result, err := t.OnePurseTransactionCollection.UpdateByID(ctx, transactionID, updateParam)
 	if err != nil {
-		logrus.Fatalf("[Mongo]: error updating transaction %s: %s", transactionID, err.Error())
+		logrus.Errorf("[Mongo]: error updating transaction %s: %s", transactionID, err.Error())
 		return err
 	}
 
 	if result.MatchedCount == 0 {
-		logrus.Fatalf("[Mongo] error updating transaction %s: record not found", transactionID)
+		logrus.Errorf("[Mongo] error updating transaction %s: record not found", transactionID)
 		return errors.New("transaction record not found")
+	}
+	return nil
+}
+
+func (t TransactionDAL) UpdateAdminPayment(ctx context.Context, ID string, updateParam bson.D) error {
+	result, err := t.AdminPaymentCollection.UpdateByID(ctx, ID, updateParam)
+	if err != nil {
+		logrus.Errorf("[Mongo]: error updating payment %s: %s", ID, err.Error())
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		logrus.Errorf("[Mongo]: error updating payment %s: record not found", ID)
+		return errors.New("payment record not found")
+	}
+	return nil
+}
+
+func (t TransactionDAL) UpdateRate(ctx context.Context, updateParam bson.D) error {
+	result, err := t.RateCollection.UpdateOne(ctx, bson.D{}, updateParam)
+	if err != nil {
+		logrus.Errorf("[Mongo]: error updating rate: %s", err.Error())
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		logrus.Errorf("[Mongo]: error updating rate: record not found")
+		return errors.New("rate record not found")
 	}
 	return nil
 }
@@ -419,4 +521,34 @@ func (t TransactionDAL) CheckTimeLimit() error {
 	}
 	logrus.Info("Completed Transaction Time Limit Cron")
 	return nil
+}
+
+func (t TransactionDAL) CountAll(ctx context.Context) (int32, error) {
+	nT, err := t.TransferCollection.CountDocuments(ctx, bson.D{})
+	if err != nil {
+		return 0, err
+	}
+
+	nOT, err := t.OnePurseTransactionCollection.CountDocuments(ctx, bson.D{})
+	if err != nil {
+		return 0, err
+	}
+
+	nE, err := t.ExchangeCollection.CountDocuments(ctx, bson.D{})
+	if err != nil {
+		return 0, err
+	}
+
+	nW, err := t.WithdrawalCollection.CountDocuments(ctx, bson.D{})
+	if err != nil {
+		return 0, err
+	}
+
+	nD, err := t.DepositCollection.CountDocuments(ctx, bson.D{})
+	if err != nil {
+		return 0, err
+	}
+
+	total := nOT + nE + nT + nW + nD
+	return int32(total), nil
 }

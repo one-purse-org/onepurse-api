@@ -15,6 +15,7 @@ type Withdrawal struct {
 type Transfer struct {
 	ID             string    `bson:"_id" json:"id"`
 	User           *User     `bson:"user" json:"user"`
+	AgentID        string    `bson:"agent_id" json:"agent_id"`
 	BaseAmount     float32   `bson:"base_amount" json:"base_amount"`
 	BaseCurrency   string    `bson:"base_currency" json:"base_currency"`
 	AmountSent     float32   `bson:"amount_sent" json:"amount_sent"`
@@ -43,7 +44,8 @@ type OnePurseTransaction struct {
 
 type Deposit struct {
 	ID             string    `bson:"_id" json:"id"`
-	User           *User     `bson:"user" json:"user"`
+	UserID         string    `bson:"user_id" json:"user_id"`
+	AgentID        string    `bson:"agent_id" json:"agent_id"`
 	BaseCurrency   string    `bson:"base_currency" json:"base_currency"`
 	BaseAmount     float32   `bson:"amount" json:"amount"`
 	PaymentChannel string    `bson:"payment_channel" json:"payment_channel"`
@@ -56,7 +58,8 @@ type Deposit struct {
 
 type Exchange struct {
 	ID                       string    `bson:"_id" json:"id"`
-	User                     *User     `bson:"user" json:"user"`
+	UserID                   string    `bson:"user" json:"user"`
+	AgentID                  string    `bson:"agent_id" json:"agent_id"`
 	BaseCurrency             string    `bson:"base_currency" json:"base_currency"`
 	BaseAmount               float32   `bson:"base_amount" json:"base_amount"`
 	ExchangeCurrency         string    `bson:"exchange_currency" json:"exchange_currency"`
@@ -94,4 +97,24 @@ type Account struct {
 	BankName      string `bson:"bank_name" json:"bank_name"`
 	IsAgent       bool   `bson:"is_agent" json:"is_agent"`
 	IsUser        bool   `bson:"is_user" json:"is_user"`
+}
+
+type Rate struct {
+	NGN map[string]float32 `json:"ngn" bson:"ngn"`
+	USD map[string]float32 `json:"usd" bson:"usd"`
+	BSD map[string]float32 `json:"bsd" bson:"bsd"`
+	BTC map[string]float32 `json:"btc" bson:"btc"`
+}
+
+type AdminPayment struct {
+	RecipientName string  `json:"recipient_name" bson:"recipient_name"`
+	Category      string  `json:"category" bson:"category"`
+	BaseCurrency  string  `json:"base_currency" bson:"base_currency"`
+	BaseAmount    float32 `json:"base_amount" bson:"base_amount"`
+	ConvCurrency  string  `json:"conv_currency" bson:"conv_currency"`
+	Description   string  `json:"description" bson:"description"`
+	Receipt       string  `json:"receipt" bson:"receipt"`
+}
+
+type PaymentCategory struct {
 }

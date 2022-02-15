@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	cognitoType "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/smithy-go"
 	"github.com/go-chi/chi"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
 	"github.com/isongjosiah/work/onepurse-api/tracing"
+	"github.com/isongjosiah/work/onepurse-api/types"
 	"github.com/lucsky/cuid"
 	"github.com/pkg/errors"
+	"go.mongodb.org/mongo-driver/bson"
 	"net/http"
 	"time"
 )
@@ -26,59 +29,166 @@ func (a *API) AuthRoutes(router *chi.Mux) http.Handler {
 }
 
 func (a *API) login(w http.ResponseWriter, r *http.Request) *ServerResponse {
-	var login model.LoginRequest
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	action := r.URL.Query().Get("action")
 
-	if err := decodeJSONBody(&tracingContext, r.Body, &login); err != nil {
-		return RespondWithError(err, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
-	}
-	if login.Username == "" {
-		return RespondWithError(nil, "Username is a required field", http.StatusBadRequest, &tracingContext)
-	}
+	switch action {
+	case types.REQUIRE_NEW_PASSWORD:
+		var login model.NewPasswordChallengeInput
+		if err := decodeJSONBody(&tracingContext, r.Body, &login); err != nil {
+			return RespondWithError(err, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
+		}
+		if login.Username == "" {
+			return RespondWithError(nil, "Username is a required field", http.StatusBadRequest, &tracingContext)
+		}
 
-	if login.Password == "" {
-		return RespondWithError(nil, "Password is a required field", http.StatusBadRequest, &tracingContext)
-	}
+		if login.Password == "" {
+			return RespondWithError(nil, "Password is a required field", http.StatusBadRequest, &tracingContext)
+		}
 
-	authResponse, err := a.Deps.AWS.Cognito.Login(&login)
-	if err != nil {
-		var ae smithy.APIError
-		if errors.As(err, &ae) {
-			switch ae.ErrorCode() {
-			case "InvalidParameterException":
-				return RespondWithError(err, "Invalid parameters provided", http.StatusBadRequest, &tracingContext)
-			case "NotAuthorizedException":
-				return RespondWithError(err, "Not authorized", http.StatusUnauthorized, &tracingContext)
-			case "PasswordResetRequiredException":
-				return RespondWithError(err, "Password reset required", http.StatusUnauthorized, &tracingContext)
-			case "UserNotConfirmedException":
-				return RespondWithError(err, "User is not confirmed", http.StatusUnauthorized, &tracingContext)
-			case "UserNotFoundException":
-				return RespondWithError(err, "User is not found", http.StatusNotFound, &tracingContext)
-			case "InvalidPasswordException":
-				return RespondWithError(err, "Invalid password provided", http.StatusBadRequest, &tracingContext)
-			default:
-				return RespondWithError(err, "Could not complete request", http.StatusInternalServerError, &tracingContext)
+		if login.Session == "" {
+			return RespondWithError(nil, "Session is a required field", http.StatusBadRequest, &tracingContext)
+		}
+
+		authResponse, err := a.Deps.AWS.Cognito.InvitedUserChangePassword(&login)
+		if err != nil {
+			var ae smithy.APIError
+			if errors.As(err, &ae) {
+				switch ae.ErrorCode() {
+				case "InvalidParameterException":
+					return RespondWithError(err, "Invalid parameters provided", http.StatusBadRequest, &tracingContext)
+				case "NotAuthorizedException":
+					return RespondWithError(err, "Not authorized", http.StatusUnauthorized, &tracingContext)
+				case "PasswordResetRequiredException":
+					return RespondWithError(err, "Password reset required", http.StatusUnauthorized, &tracingContext)
+				case "UserNotConfirmedException":
+					return RespondWithError(err, "UserID is not confirmed", http.StatusUnauthorized, &tracingContext)
+				case "UserNotFoundException":
+					return RespondWithError(err, "UserID is not found", http.StatusNotFound, &tracingContext)
+				case "InvalidPasswordException":
+					return RespondWithError(err, "Invalid password provided", http.StatusBadRequest, &tracingContext)
+				default:
+					return RespondWithError(err, "Could not complete request", http.StatusInternalServerError, &tracingContext)
+				}
 			}
 		}
-	}
-	u, err := a.Deps.DAL.UserDAL.FindByUsername(context.TODO(), login.Username)
-	if err != nil {
-		return RespondWithError(err, "Failed to fetch user information", http.StatusInternalServerError, &tracingContext)
 
-	}
-	data, err := json.Marshal(&u)
-	if err != nil {
-		return RespondWithError(err, "Failed to marshal user struct", http.StatusInternalServerError, &tracingContext)
-	}
+		return &ServerResponse{Payload: authResponse}
+	case types.ADMIN_LOGIN:
+		var login model.LoginRequest
+		if err := decodeJSONBody(&tracingContext, r.Body, &login); err != nil {
+			return RespondWithError(err, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
+		}
+		if login.Username == "" {
+			return RespondWithError(nil, "Username is a required field", http.StatusBadRequest, &tracingContext)
+		}
 
-	var user model.UserAuthResp
-	if err := json.Unmarshal(data, &user); err != nil {
-		return RespondWithError(err, "Failed to unmarshal user json", http.StatusInternalServerError, &tracingContext)
-	}
-	authResponse.User = &user
+		if login.Password == "" {
+			return RespondWithError(nil, "Password is a required field", http.StatusBadRequest, &tracingContext)
+		}
 
-	return &ServerResponse{Payload: authResponse}
+		authResponse, err := a.Deps.AWS.Cognito.Login(&login)
+		if err != nil {
+			var ae smithy.APIError
+			if errors.As(err, &ae) {
+				switch ae.ErrorCode() {
+				case "InvalidParameterException":
+					return RespondWithError(err, "Invalid parameters provided", http.StatusBadRequest, &tracingContext)
+				case "NotAuthorizedException":
+					return RespondWithError(err, "Not authorized", http.StatusUnauthorized, &tracingContext)
+				case "PasswordResetRequiredException":
+					return RespondWithError(err, "Password reset required", http.StatusUnauthorized, &tracingContext)
+				case "UserNotConfirmedException":
+					return RespondWithError(err, "UserID is not confirmed", http.StatusUnauthorized, &tracingContext)
+				case "UserNotFoundException":
+					return RespondWithError(err, "UserID is not found", http.StatusNotFound, &tracingContext)
+				case "InvalidPasswordException":
+					return RespondWithError(err, "Invalid password provided", http.StatusBadRequest, &tracingContext)
+				default:
+					return RespondWithError(err, "Could not complete request", http.StatusInternalServerError, &tracingContext)
+				}
+			}
+		}
+
+		if authResponse.ChallengeName == string(cognitoType.ChallengeNameTypeNewPasswordRequired) {
+			return &ServerResponse{Payload: authResponse}
+		}
+
+		u, err := a.Deps.DAL.AdminDAL.FindAdmin(context.TODO(), bson.D{{"$or", []bson.M{{"username": login.Username}, {"email": login.Username}}}})
+		if err != nil {
+			return RespondWithError(err, "Failed to fetch user information", http.StatusInternalServerError, &tracingContext)
+
+		}
+		data, err := json.Marshal(&u)
+		if err != nil {
+			return RespondWithError(err, "Failed to marshal user struct", http.StatusInternalServerError, &tracingContext)
+		}
+
+		var user model.UserAuthResp
+		if err := json.Unmarshal(data, &user); err != nil {
+			return RespondWithError(err, "Failed to unmarshal user json", http.StatusInternalServerError, &tracingContext)
+		}
+		authResponse.User = &user
+
+		return &ServerResponse{Payload: authResponse}
+	default:
+		var login model.LoginRequest
+		if err := decodeJSONBody(&tracingContext, r.Body, &login); err != nil {
+			return RespondWithError(err, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
+		}
+		if login.Username == "" {
+			return RespondWithError(nil, "Username is a required field", http.StatusBadRequest, &tracingContext)
+		}
+
+		if login.Password == "" {
+			return RespondWithError(nil, "Password is a required field", http.StatusBadRequest, &tracingContext)
+		}
+
+		authResponse, err := a.Deps.AWS.Cognito.Login(&login)
+		if err != nil {
+			var ae smithy.APIError
+			if errors.As(err, &ae) {
+				switch ae.ErrorCode() {
+				case "InvalidParameterException":
+					return RespondWithError(err, "Invalid parameters provided", http.StatusBadRequest, &tracingContext)
+				case "NotAuthorizedException":
+					return RespondWithError(err, "Not authorized", http.StatusUnauthorized, &tracingContext)
+				case "PasswordResetRequiredException":
+					return RespondWithError(err, "Password reset required", http.StatusUnauthorized, &tracingContext)
+				case "UserNotConfirmedException":
+					return RespondWithError(err, "UserID is not confirmed", http.StatusUnauthorized, &tracingContext)
+				case "UserNotFoundException":
+					return RespondWithError(err, "UserID is not found", http.StatusNotFound, &tracingContext)
+				case "InvalidPasswordException":
+					return RespondWithError(err, "Invalid password provided", http.StatusBadRequest, &tracingContext)
+				default:
+					return RespondWithError(err, "Could not complete request", http.StatusInternalServerError, &tracingContext)
+				}
+			}
+		}
+
+		if authResponse.ChallengeName == string(cognitoType.ChallengeNameTypeNewPasswordRequired) {
+			return &ServerResponse{Payload: authResponse}
+		}
+
+		u, err := a.Deps.DAL.UserDAL.FindByUsername(context.TODO(), login.Username)
+		if err != nil {
+			return RespondWithError(err, "Failed to fetch user information", http.StatusInternalServerError, &tracingContext)
+
+		}
+		data, err := json.Marshal(&u)
+		if err != nil {
+			return RespondWithError(err, "Failed to marshal user struct", http.StatusInternalServerError, &tracingContext)
+		}
+
+		var user model.UserAuthResp
+		if err := json.Unmarshal(data, &user); err != nil {
+			return RespondWithError(err, "Failed to unmarshal user json", http.StatusInternalServerError, &tracingContext)
+		}
+		authResponse.User = &user
+
+		return &ServerResponse{Payload: authResponse}
+	}
 }
 
 func (a *API) signUp(w http.ResponseWriter, r *http.Request) *ServerResponse {
@@ -115,7 +225,7 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) *ServerResponse {
 			case "InvalidPasswordException":
 				return RespondWithError(err, "Password should be at lease eight characters long, contain uppercase, lowercase characters and symbols", http.StatusBadRequest, &tracingContext)
 			case "UsernameExistsException":
-				return RespondWithError(err, "User already exists. Please sign in", http.StatusBadRequest, &tracingContext)
+				return RespondWithError(err, "UserID already exists. Please sign in", http.StatusBadRequest, &tracingContext)
 			case "CodeDeliveryFailureException":
 				return RespondWithError(err, "Could not send verification code", http.StatusBadRequest, &tracingContext)
 			case "NotAuthorizedException":
@@ -151,6 +261,7 @@ func (a *API) signUp(w http.ResponseWriter, r *http.Request) *ServerResponse {
 		CreatedAt:              time.Now(),
 		DeviceToken:            "",
 		Active:                 true,
+		Approved:               false,
 	}
 
 	err = a.Deps.DAL.UserDAL.Add(context.TODO(), user)

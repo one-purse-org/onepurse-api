@@ -13,11 +13,12 @@ import (
 type IUserDAL interface {
 	Add(ctx context.Context, user *model.User) error
 	FindByID(ctx context.Context, userID string) (*model.User, error)
-	FindAll(ctx context.Context) (*[]model.User, error)
+	FindAll(ctx context.Context, query bson.D) (*[]model.User, error)
 	FindOne(ctx context.Context, query bson.D) (*model.User, error)
 	FindByUsername(ctx context.Context, username string) (*model.User, error)
 	UpdateUser(ctx context.Context, userID string, updateParam bson.D) error
 	DeleteUser(ctx context.Context, userID string) error
+	Count(ctx context.Context) (int32, error)
 }
 
 type UserDAL struct {
@@ -57,10 +58,10 @@ func (u UserDAL) FindByID(ctx context.Context, userID string) (*model.User, erro
 	return user, nil
 }
 
-func (u UserDAL) FindAll(ctx context.Context) (*[]model.User, error) {
+func (u UserDAL) FindAll(ctx context.Context, query bson.D) (*[]model.User, error) {
 	var users []model.User
 
-	cursor, err := u.Collection.Find(ctx, bson.D{})
+	cursor, err := u.Collection.Find(ctx, query)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return &[]model.User{}, nil // TODO(josiah): confirm that this logic implements what you have in mind
@@ -140,4 +141,12 @@ func (u UserDAL) DeleteUser(ctx context.Context, userID string) error {
 		return errors.New("user record does not exist")
 	}
 	return nil
+}
+
+func (u UserDAL) Count(ctx context.Context) (int32, error) {
+	num, err := u.Collection.CountDocuments(ctx, bson.D{})
+	if err != nil {
+		return 0, err
+	}
+	return int32(num), err
 }

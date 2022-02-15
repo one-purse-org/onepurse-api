@@ -1,6 +1,8 @@
 package model
 
 import (
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+
 	"time"
 )
 
@@ -28,6 +30,7 @@ type User struct {
 	CreatedAt              time.Time           `bson:"created_at, omitempty" json:"created_at,omitempty"`
 	DeviceToken            string              `bson:"device_token, omitempty" json:"device_token,omitempty"`
 	Active                 bool                `bson:"active, omitempty" json:"active,omitempty"`
+	Approved               bool                `bson:"approved" json:"approved"`
 }
 
 type UserAuthResp struct {
@@ -83,11 +86,13 @@ type LoginRequest struct {
 }
 
 type AuthResponse struct {
-	User         *UserAuthResp `json:"user"`
-	Email        string        `json:"email"`
-	AccessToken  string        `json:"access_token"`
-	RefreshToken string        `json:"refresh_token"`
-	ExpiresAt    time.Time     `json:"expires_at"`
+	ChallengeName string        `json:"challenge_name"`
+	User          *UserAuthResp `json:"user"`
+	Email         string        `json:"email"`
+	AccessToken   string        `json:"access_token"`
+	Session       string        `json:"session"`
+	RefreshToken  string        `json:"refresh_token"`
+	ExpiresAt     time.Time     `json:"expires_at"`
 }
 
 type RegistrationRequest struct {
@@ -101,6 +106,10 @@ type SignupResponse struct {
 	IsConfirmed    bool   `json:"is_confirmed"`
 	DeliveryMedium string `json:"delivery_medium"`
 	Destination    string `json:"destination"`
+}
+
+type CreateUserResponse struct {
+	User *types.UserType `json:"user"`
 }
 
 type VerificationRequest struct {
@@ -133,7 +142,7 @@ type UpdateUsername struct {
 // UserAccount is the model for user bank account information
 type UserAccount struct {
 	ID        string    `bson:"_id" json:"id"`
-	User      *User     `bson:"user" json:"user"`
+	UserID    string    `bson:"user_id" json:"user_id"`
 	Name      string    `bson:"name" json:"name"`
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 	UpdatedAt time.Time `bson:"updated_at" json:"updated_at"`

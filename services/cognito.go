@@ -13,12 +13,14 @@ import (
 	"github.com/isongjosiah/work/onepurse-api/config"
 	"github.com/isongjosiah/work/onepurse-api/dal/model"
 	"github.com/pkg/errors"
+	"github.com/sethvargo/go-password/password"
 	"github.com/sirupsen/logrus"
 	"time"
 )
 
 type ICognitoService interface {
 	Login(l *model.LoginRequest) (*model.AuthResponse, error)
+	InvitedUserChangePassword(l *model.NewPasswordChallengeInput) (*model.AuthResponse, error)
 	SignUp(r *model.RegistrationRequest) (*model.SignupResponse, error)
 	ConfirmSignUp(v *model.VerificationRequest) (bool, error)
 	ResendCode(email string) (*cognito.ResendConfirmationCodeOutput, error)
@@ -26,6 +28,7 @@ type ICognitoService interface {
 	ConfirmForgotPassword(p *model.ConfirmForgotPasswordRequest) (bool, error)
 	ChangePassword(p *model.ChangePassword) (bool, error)
 	UpdateUsername(ua *model.UpdateUsername) error
+	CreateUser(r *model.RegistrationRequest) (*model.CreateUserResponse, error)
 }
 
 type CognitoService struct {
@@ -72,12 +75,41 @@ func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error
 		return nil, err
 	}
 
+	var authResponse *model.AuthResponse
+	if cognitoResponse.ChallengeName == types.ChallengeNameTypeNewPasswordRequired {
+		fmt.Println(cognitoResponse.ChallengeParameters)
+		authResponse = &model.AuthResponse{
+			ChallengeName: string(cognitoResponse.ChallengeName),
+			Session:       *cognitoResponse.Session,
+		}
+	} else {
+		authResponse = &model.AuthResponse{
+			AccessToken:  *cognitoResponse.AuthenticationResult.AccessToken,
+			RefreshToken: *cognitoResponse.AuthenticationResult.RefreshToken,
+			ExpiresAt:    now.Add(time.Second * time.Duration(cognitoResponse.AuthenticationResult.ExpiresIn)),
+		}
+	}
+	return authResponse, nil
+}
+
+func (c CognitoService) InvitedUserChangePassword(l *model.NewPasswordChallengeInput) (*model.AuthResponse, error) {
+	params := &cognito.RespondToAuthChallengeInput{
+		ChallengeName:      types.ChallengeNameTypeNewPasswordRequired,
+		ClientId:           aws.String(c.config.CognitoAppClientID),
+		ChallengeResponses: map[string]string{"NEW_PASSWORD": l.Password, "USERNAME": l.Username, "SECRET_HASH": c.generateCognitoSecretHash(l.Username)},
+		Session:            aws.String(l.Session),
+	}
+	now := time.Now()
+	cognitoResponse, err := c.cognitoClient.RespondToAuthChallenge(context.TODO(), params)
+	if err != nil {
+		return nil, err
+	}
+
 	authResponse := &model.AuthResponse{
 		AccessToken:  *cognitoResponse.AuthenticationResult.AccessToken,
 		RefreshToken: *cognitoResponse.AuthenticationResult.RefreshToken,
 		ExpiresAt:    now.Add(time.Second * time.Duration(cognitoResponse.AuthenticationResult.ExpiresIn)),
 	}
-
 	return authResponse, nil
 }
 
@@ -114,6 +146,57 @@ func (c CognitoService) SignUp(r *model.RegistrationRequest) (*model.SignupRespo
 		Destination:    *cognitoResponse.CodeDeliveryDetails.Destination,
 	}
 	return signupResponse, nil
+}
+
+func (c CognitoService) CreateUser(r *model.RegistrationRequest) (*model.CreateUserResponse, error) {
+	pass, err := password.Generate(10, 2, 3, false, false)
+	fmt.Println(pass)
+	if err != nil {
+		return nil, err
+	}
+	params := &cognito.AdminCreateUserInput{
+		UserPoolId: aws.String(c.config.CognitoUserPoolID),
+		Username:   aws.String(r.Email),
+		DesiredDeliveryMediums: []types.DeliveryMediumType{
+			types.DeliveryMediumTypeEmail,
+		},
+		ForceAliasCreation: true, //TODO(JOSIAH): Remember to check that no user already use the specified username
+		UserAttributes: []types.AttributeType{
+			{
+				Name:  aws.String("email"),
+				Value: aws.String(r.Email),
+			},
+			{
+				Name:  aws.String("phone_number"),
+				Value: aws.String(r.Phone),
+			},
+			{
+				Name:  aws.String("name"),
+				Value: aws.String(r.FullName),
+			},
+			{
+				Name:  aws.String("email_verified"),
+				Value: aws.String("true"),
+			},
+			{
+				Name:  aws.String("phone_number_verified"),
+				Value: aws.String("true"),
+			},
+			{
+				Name:  aws.String("preferred_username"),
+				Value: aws.String(r.FullName),
+			},
+		},
+	}
+
+	cognitoResponse, err := c.cognitoClient.AdminCreateUser(context.TODO(), params)
+	if err != nil {
+		fmt.Println("ERRORED HERE", cognitoResponse)
+		return nil, err
+	}
+
+	resp := model.CreateUserResponse{User: cognitoResponse.User}
+	return &resp, nil
 }
 
 func (c CognitoService) ConfirmSignUp(v *model.VerificationRequest) (bool, error) {

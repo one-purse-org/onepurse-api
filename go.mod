@@ -23,6 +23,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/plaid/plaid-go v1.6.0
 	github.com/pquerna/otp v1.3.0
+	github.com/sethvargo/go-password v0.2.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/twilio/twilio-go v0.19.0
 	go.mongodb.org/mongo-driver v1.7.2

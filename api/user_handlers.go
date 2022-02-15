@@ -32,9 +32,9 @@ func (a *API) UserRoutes() http.Handler {
 
 	// Transaction Routes
 	router.Method("POST", "/{userID}/transaction", Handler(a.createTransaction))
-	router.Method("PATCH", "/transaction/{transactionID}/", Handler(a.updateTransaction))
+	router.Method("PATCH", "/transaction/{transactionID}", Handler(a.updateTransaction))
 	router.Method("GET", "/{userID}/transaction", Handler(a.getTransaction))
-	router.Method("GET", "/transaction/{transactionID}/get_agent", Handler(a.getAgentForTransaction))
+	router.Method("GET", "/transaction/{transactionID}/get_peer", Handler(a.getAgentForTransaction))
 
 	// OTP Token Routes
 	router.Method("GET", "/{userID}/otp", Handler(a.generateOTPToken))
@@ -183,7 +183,7 @@ func (a *API) updateUserName(w http.ResponseWriter, r *http.Request) *ServerResp
 
 	if err := decodeJSONBody(&tracingContext, r.Body, &param); err != nil {
 		fmt.Println(err)
-		return RespondWithError(err, "Failed to decode request body", http.StatusInternalServerError, &tracingContext)
+		return RespondWithError(err, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
 	}
 
 	param.AccessToken = strings.Split(r.Header.Get("Authorization"), " ")[1]
@@ -519,7 +519,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		deposit.Status = "created"
 		deposit.ID = cuid.New()
 		deposit.CreatedAt = time.Now()
-		deposit.User = user
+		deposit.UserID = user.ID
 
 		err := a.Deps.DAL.TransactionDAL.CreateDeposit(context.TODO(), &deposit)
 		if err != nil {
@@ -543,11 +543,11 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		if exchange.ExchangeAmount == 0 || exchange.ExchangeCurrency == "" {
 			return RespondWithError(nil, "exchange amount and currency is required", http.StatusBadRequest, &tracingContext)
 		}
-		if exchange.IsCryptoExchange == false && (exchange.AgentAccount == nil || exchange.PaymentChannel == "") {
-			return RespondWithError(nil, "agent account and payment channel is required", http.StatusBadRequest, &tracingContext)
+		if exchange.IsCryptoExchange == false && exchange.PaymentChannel == "" {
+			return RespondWithError(nil, "agent account and payment channel is required for fiat exchange", http.StatusBadRequest, &tracingContext)
 		}
 		if exchange.IsCryptoExchange == true && (exchange.BlockchainChannel == "" || exchange.CryptoWalletAddress == "") {
-			return RespondWithError(nil, "crypto information is not provided", http.StatusBadRequest, &tracingContext)
+			return RespondWithError(nil, "blockchain channel and crypto wallet address is required for crypto exchange", http.StatusBadRequest, &tracingContext)
 		}
 
 		pass := helpers.DoSufficientFundsCheck(user, exchange.BaseAmount, exchange.BaseCurrency)
@@ -558,7 +558,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		exchange.CreatedAt = time.Now()
 		exchange.ID = cuid.New()
 		exchange.Status = "initiated"
-		exchange.User = user
+		exchange.UserID = user.ID
 		err := a.Deps.DAL.TransactionDAL.CreateExchange(context.TODO(), &exchange)
 		if err != nil {
 			return RespondWithError(err, "Failed to initiate transaction. Please try again", http.StatusBadRequest, &tracingContext)
@@ -865,7 +865,7 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 				}
 
 				// create notification
-				message := fmt.Sprintf("you have been matched to %s for a %s %v transaction", exchange.User.FullName, exchange.ExchangeCurrency, exchange.ExchangeAmount)
+				message := fmt.Sprintf("you have been matched to %s for a %s %v transaction", user.FullName, exchange.ExchangeCurrency, exchange.ExchangeAmount)
 				err = a.CreateNotification(sesCtx, user.ID, types.TRANSACTION_MATCH, message, types.EXCHANGE, user.DeviceToken, exchange)
 				if err != nil {
 					return nil, err
@@ -899,7 +899,7 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 				}
 
 				// create notification
-				message := fmt.Sprintf("you have been matched to %s for a %s %v transaction", exchange.User.FullName, exchange.ExchangeCurrency, exchange.ExchangeAmount)
+				message := fmt.Sprintf("you have been matched to %s for a %s %v transaction", agent.FullName, exchange.ExchangeCurrency, exchange.ExchangeAmount)
 				err = a.CreateNotification(sesCtx, agent.ID, types.TRANSACTION_MATCH, message, types.EXCHANGE, agent.DeviceToken, exchange)
 				if err != nil {
 					return nil, err
@@ -1120,10 +1120,11 @@ func (a *API) getWalletTransaction(w http.ResponseWriter, r *http.Request) *Serv
 	response[types.TRANSFER] = transfers
 	response[types.WITHDRAW] = withdraws
 	response[types.DEPOSIT] = deposits
-	response["exchanges"] = exchanges
+	response[types.EXCHANGE] = exchanges
 
 	return &ServerResponse{
 		Payload: response,
+		Message: "wallet transaction fetched successfully",
 	}
 
 }
