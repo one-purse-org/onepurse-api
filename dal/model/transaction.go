@@ -14,7 +14,7 @@ type Withdrawal struct {
 
 type Transfer struct {
 	ID             string    `bson:"_id" json:"id"`
-	User           *User     `bson:"user" json:"user"`
+	UserID         string    `bson:"user_id" json:"user_id"`
 	AgentID        string    `bson:"agent_id" json:"agent_id"`
 	BaseAmount     float32   `bson:"base_amount" json:"base_amount"`
 	BaseCurrency   string    `bson:"base_currency" json:"base_currency"`

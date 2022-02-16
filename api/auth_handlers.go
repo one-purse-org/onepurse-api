@@ -131,6 +131,63 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) *ServerResponse {
 		authResponse.User = &user
 
 		return &ServerResponse{Payload: authResponse}
+	case types.AGENT_LOGIN:
+		var login model.LoginRequest
+		if err := decodeJSONBody(&tracingContext, r.Body, &login); err != nil {
+			return RespondWithError(err, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
+		}
+		if login.Username == "" {
+			return RespondWithError(nil, "Username is a required field", http.StatusBadRequest, &tracingContext)
+		}
+
+		if login.Password == "" {
+			return RespondWithError(nil, "Password is a required field", http.StatusBadRequest, &tracingContext)
+		}
+
+		authResponse, err := a.Deps.AWS.Cognito.Login(&login)
+		if err != nil {
+			var ae smithy.APIError
+			if errors.As(err, &ae) {
+				switch ae.ErrorCode() {
+				case "InvalidParameterException":
+					return RespondWithError(err, "Invalid parameters provided", http.StatusBadRequest, &tracingContext)
+				case "NotAuthorizedException":
+					return RespondWithError(err, "Not authorized", http.StatusUnauthorized, &tracingContext)
+				case "PasswordResetRequiredException":
+					return RespondWithError(err, "Password reset required", http.StatusUnauthorized, &tracingContext)
+				case "UserNotConfirmedException":
+					return RespondWithError(err, "UserID is not confirmed", http.StatusUnauthorized, &tracingContext)
+				case "UserNotFoundException":
+					return RespondWithError(err, "UserID is not found", http.StatusNotFound, &tracingContext)
+				case "InvalidPasswordException":
+					return RespondWithError(err, "Invalid password provided", http.StatusBadRequest, &tracingContext)
+				default:
+					return RespondWithError(err, "Could not complete request", http.StatusInternalServerError, &tracingContext)
+				}
+			}
+		}
+
+		if authResponse.ChallengeName == string(cognitoType.ChallengeNameTypeNewPasswordRequired) {
+			return &ServerResponse{Payload: authResponse}
+		}
+
+		u, err := a.Deps.DAL.AgentDAL.FindOne(context.TODO(), bson.D{{"$or", []bson.M{{"username": login.Username}, {"email": login.Username}}}})
+		if err != nil {
+			return RespondWithError(err, "Failed to fetch user information", http.StatusInternalServerError, &tracingContext)
+
+		}
+		data, err := json.Marshal(&u)
+		if err != nil {
+			return RespondWithError(err, "Failed to marshal user struct", http.StatusInternalServerError, &tracingContext)
+		}
+
+		var user model.UserAuthResp
+		if err := json.Unmarshal(data, &user); err != nil {
+			return RespondWithError(err, "Failed to unmarshal user json", http.StatusInternalServerError, &tracingContext)
+		}
+		authResponse.User = &user
+
+		return &ServerResponse{Payload: authResponse}
 	default:
 		var login model.LoginRequest
 		if err := decodeJSONBody(&tracingContext, r.Body, &login); err != nil {

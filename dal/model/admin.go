@@ -3,6 +3,7 @@ package model
 // Admin is the struct that defines an admin
 type Admin struct {
 	ID       string `bson:"_id"`
+	FullName string `bson:"full_name" json:"full_name"`
 	Username string `bson:"username" json:"username"`
 	Email    string `bson:"email" json:"email"`
 	Phone    string `bson:"phone" json:"phone"`

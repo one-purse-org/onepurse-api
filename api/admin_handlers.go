@@ -64,8 +64,11 @@ func (a *API) createAdmin(w http.ResponseWriter, r *http.Request) *ServerRespons
 		return RespondWithError(err, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
 	}
 
-	if admin.Username == "" {
+	if admin.FullName == "" {
 		return RespondWithError(nil, "full_name is required", http.StatusBadRequest, &tracingContext)
+	}
+	if admin.Username == "" {
+		return RespondWithError(nil, "username is required", http.StatusBadRequest, &tracingContext)
 	}
 	if admin.Email == "" {
 		return RespondWithError(nil, "email is required", http.StatusBadRequest, &tracingContext)
@@ -77,11 +80,11 @@ func (a *API) createAdmin(w http.ResponseWriter, r *http.Request) *ServerRespons
 		return RespondWithError(nil, "admin role is required", http.StatusBadRequest, &tracingContext)
 	}
 
-	registration := model.RegistrationRequest{
+	registration := model.CreateUserRequest{
 		Email:    admin.Email,
-		FullName: admin.Username,
-		Password: "",
+		FullName: admin.FullName,
 		Phone:    admin.Phone,
+		UserName: admin.Username,
 	}
 	createResponse, err := a.Deps.AWS.Cognito.CreateUser(&registration)
 	if err != nil {
@@ -346,11 +349,11 @@ func (a *API) adminCreateAgent(w http.ResponseWriter, r *http.Request) *ServerRe
 		return RespondWithError(nil, "phone is required", http.StatusBadRequest, &tracingContext)
 	}
 
-	registration := model.RegistrationRequest{
+	registration := model.CreateUserRequest{
 		Email:    agent.Email,
 		FullName: agent.FullName,
-		Password: "",
 		Phone:    agent.Phone,
+		UserName: agent.UserName,
 	}
 	createResponse, err := a.Deps.AWS.Cognito.CreateUser(&registration)
 	if err != nil {
@@ -409,6 +412,12 @@ func (a *API) getAllAgents(w http.ResponseWriter, r *http.Request) *ServerRespon
 		if err != nil {
 			return RespondWithError(err, "unable to fetch approved users", http.StatusInternalServerError, &tracingContext)
 		}
+	default:
+		return &ServerResponse{
+			Err:        errors.New("this type isn't supported"),
+			Message:    "type isn't supported",
+			StatusCode: http.StatusBadRequest,
+		}
 	}
 	return &ServerResponse{
 		Payload: agent,
@@ -424,12 +433,12 @@ func (a *API) agentActions(w http.ResponseWriter, r *http.Request) *ServerRespon
 
 	switch action {
 	case types.APPROVE:
-		err := a.Deps.DAL.AgentDAL.Update(context.TODO(), id, bson.D{{"approved", true}})
+		err := a.Deps.DAL.AgentDAL.Update(context.TODO(), id, bson.D{{"$set", bson.D{{"approved", true}}}})
 		if err != nil {
 			return RespondWithError(err, "unable to approve user", http.StatusInternalServerError, &tracingContext)
 		}
 	case types.REJECT:
-		err := a.Deps.DAL.AgentDAL.Update(context.TODO(), id, bson.D{{"approved", false}})
+		err := a.Deps.DAL.AgentDAL.Update(context.TODO(), id, bson.D{{"$set", bson.D{{"approved", false}}}})
 		if err != nil {
 			return RespondWithError(err, "unable to reject user", http.StatusInternalServerError, &tracingContext)
 		}
@@ -445,7 +454,7 @@ func (a *API) getAgentTransactionHistory(w http.ResponseWriter, r *http.Request)
 	id := r.URL.Query().Get("id")
 	query := bson.D{{"agent_id", id}}
 
-	var response map[string]interface{}
+	response := make(map[string]interface{})
 	transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(context.TODO(), query)
 	if err != nil {
 		return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
@@ -461,6 +470,19 @@ func (a *API) getAgentTransactionHistory(w http.ResponseWriter, r *http.Request)
 	exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(context.TODO(), query)
 	if err != nil {
 		return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
+	}
+
+	if len(*transfers) == 0 {
+		transfers = &[]model.Transfer{}
+	}
+	if len(*withdraws) == 0 {
+		withdraws = &[]model.Withdrawal{}
+	}
+	if len(*deposits) == 0 {
+		deposits = &[]model.Deposit{}
+	}
+	if len(*exchanges) == 0 {
+		exchanges = &[]model.Exchange{}
 	}
 
 	response[types.TRANSFER] = transfers
@@ -479,7 +501,7 @@ func (a *API) fetchAllTransactions(w http.ResponseWriter, r *http.Request) *Serv
 	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
 	query := bson.D{}
 
-	var response map[string]interface{}
+	response := make(map[string]interface{})
 	transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(context.TODO(), query)
 	if err != nil {
 		return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
@@ -495,6 +517,19 @@ func (a *API) fetchAllTransactions(w http.ResponseWriter, r *http.Request) *Serv
 	exchanges, err := a.Deps.DAL.TransactionDAL.FetchExchanges(context.TODO(), query)
 	if err != nil {
 		return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
+	}
+
+	if len(*transfers) == 0 {
+		transfers = &[]model.Transfer{}
+	}
+	if len(*withdraws) == 0 {
+		withdraws = &[]model.Withdrawal{}
+	}
+	if len(*deposits) == 0 {
+		deposits = &[]model.Deposit{}
+	}
+	if len(*exchanges) == 0 {
+		exchanges = &[]model.Exchange{}
 	}
 
 	response[types.TRANSFER] = transfers
@@ -551,6 +586,9 @@ func (a *API) fetchAdminPayments(w http.ResponseWriter, r *http.Request) *Server
 		payments, err := a.Deps.DAL.TransactionDAL.FetchAdminPayments(context.TODO(), bson.D{})
 		if err != nil {
 			return RespondWithError(err, "unable to fetch admin payments", http.StatusInternalServerError, &tracingContext)
+		}
+		if len(*payments) == 0 {
+			payments = &[]model.AdminPayment{}
 		}
 		return &ServerResponse{
 			Payload: payments,

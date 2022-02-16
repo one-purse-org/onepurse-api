@@ -28,7 +28,7 @@ type ICognitoService interface {
 	ConfirmForgotPassword(p *model.ConfirmForgotPasswordRequest) (bool, error)
 	ChangePassword(p *model.ChangePassword) (bool, error)
 	UpdateUsername(ua *model.UpdateUsername) error
-	CreateUser(r *model.RegistrationRequest) (*model.CreateUserResponse, error)
+	CreateUser(r *model.CreateUserRequest) (*model.CreateUserResponse, error)
 }
 
 type CognitoService struct {
@@ -148,7 +148,7 @@ func (c CognitoService) SignUp(r *model.RegistrationRequest) (*model.SignupRespo
 	return signupResponse, nil
 }
 
-func (c CognitoService) CreateUser(r *model.RegistrationRequest) (*model.CreateUserResponse, error) {
+func (c CognitoService) CreateUser(r *model.CreateUserRequest) (*model.CreateUserResponse, error) {
 	pass, err := password.Generate(10, 2, 3, false, false)
 	fmt.Println(pass)
 	if err != nil {
@@ -184,7 +184,7 @@ func (c CognitoService) CreateUser(r *model.RegistrationRequest) (*model.CreateU
 			},
 			{
 				Name:  aws.String("preferred_username"),
-				Value: aws.String(r.FullName),
+				Value: aws.String(r.UserName),
 			},
 		},
 	}

@@ -8,7 +8,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"log"
 )
 
 type IAgentDAL interface {
@@ -78,11 +77,11 @@ func (a AgentDAL) FindAll(ctx context.Context, query bson.D) (*[]model.Agent, er
 func (a AgentDAL) Update(ctx context.Context, agentID string, updateParam bson.D) error {
 	result, err := a.Collection.UpdateByID(ctx, agentID, updateParam)
 	if err != nil {
-		log.Fatalf("[Mongo]: error update ageint %s: %s", agentID, err.Error())
+		logrus.Errorf("[Mongo]: error update ageint %s: %s", agentID, err.Error())
 		return err
 	}
 	if result.MatchedCount == 0 {
-		logrus.Fatalf("[Mongo]: error updating agent %s: agent record not found", err.Error())
+		logrus.Errorf("[Mongo]: error updating agent %s: agent record not found", err.Error())
 		return errors.New("agent record not found")
 	}
 	return nil

@@ -102,6 +102,14 @@ type RegistrationRequest struct {
 	Phone    string `json:"phone"`
 }
 
+type CreateUserRequest struct {
+	Email    string `json:"email"`
+	UserName string `json:"user_name"`
+	FullName string `json:"full_name"`
+	Password string `json:"password"`
+	Phone    string `json:"phone"`
+}
+
 type SignupResponse struct {
 	IsConfirmed    bool   `json:"is_confirmed"`
 	DeliveryMedium string `json:"delivery_medium"`

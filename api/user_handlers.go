@@ -339,7 +339,7 @@ func (a *API) createTransaction(w http.ResponseWriter, r *http.Request) *ServerR
 		transfer.Status = "created"
 		transfer.ID = cuid.New()
 		transfer.CreatedAt = time.Now()
-		transfer.User = user
+		transfer.UserID = user.ID
 
 		err := a.Deps.DAL.TransactionDAL.CreateTransfer(context.TODO(), &transfer)
 		if err != nil {
@@ -805,6 +805,10 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 		if err != nil {
 			return RespondWithError(err, "could not fetch exchange information", http.StatusInternalServerError, &tracingContext)
 		}
+		user, err := a.Deps.DAL.UserDAL.FindByID(context.TODO(), transfer.UserID)
+		if err != nil {
+			return RespondWithError(err, "could not fetch user information", http.StatusInternalServerError, &tracingContext)
+		}
 		query := bson.D{{"$gte", bson.D{{
 			fmt.Sprintf("wallet.available_balance"), transfer.BaseAmount}}},
 			{"wallet.currency", transfer.BaseCurrency}}
@@ -825,7 +829,7 @@ func (a *API) getAgentForTransaction(w http.ResponseWriter, r *http.Request) *Se
 			}
 
 			// create notification for agent
-			message := fmt.Sprintf("you have been matched to %s for a %s %v transaction", transfer.User.FullName, transfer.ConvCurrency, transfer.AmountSent)
+			message := fmt.Sprintf("you have been matched to %s for a %s %v transaction", user.FullName, transfer.ConvCurrency, transfer.AmountSent)
 			err = a.CreateNotification(sesCtx, agent.ID, types.TRANSACTION_MATCH, message, types.TRANSFER, agent.DeviceToken, transfer)
 			if err != nil {
 				return nil, err
