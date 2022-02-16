@@ -112,8 +112,9 @@ func (a *API) createAdmin(w http.ResponseWriter, r *http.Request) *ServerRespons
 	}
 
 	return &ServerResponse{
-		Payload: createResponse,
-		Message: "admin created successfully",
+		Payload:    createResponse,
+		Message:    "admin created successfully",
+		StatusCode: http.StatusCreated,
 	}
 }
 
@@ -172,7 +173,9 @@ func (a *API) getMetrics(w http.ResponseWriter, r *http.Request) *ServerResponse
 		CurrencyMetric:    currencyMetrics,
 	}
 	return &ServerResponse{
-		Payload: metrics,
+		Payload:    metrics,
+		Message:    "Metrics Fetched Successfully",
+		StatusCode: http.StatusOK,
 	}
 }
 
@@ -232,10 +235,17 @@ func (a *API) getAllUsers(w http.ResponseWriter, r *http.Request) *ServerRespons
 		if err != nil {
 			return RespondWithError(err, "unable to fetch approved users", http.StatusInternalServerError, &tracingContext)
 		}
+	default:
+		return &ServerResponse{
+			Message:    "Specified type is not supported",
+			StatusCode: http.StatusBadRequest,
+			Err:        errors.New("Specified type is not supported"),
+		}
 	}
 	return &ServerResponse{
-		Payload: user,
-		Message: "users fetched successfully",
+		Payload:    user,
+		Message:    "users fetched successfully",
+		StatusCode: http.StatusOK,
 	}
 }
 
@@ -247,14 +257,20 @@ func (a *API) userActions(w http.ResponseWriter, r *http.Request) *ServerRespons
 
 	switch action {
 	case types.APPROVE:
-		err := a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), id, bson.D{{"approved", true}})
+		err := a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), id, bson.D{{"$set", bson.D{{"approved", true}}}})
 		if err != nil {
 			return RespondWithError(err, "unable to approve user", http.StatusInternalServerError, &tracingContext)
 		}
 	case types.REJECT:
-		err := a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), id, bson.D{{"approved", false}})
+		err := a.Deps.DAL.UserDAL.UpdateUser(context.TODO(), id, bson.D{{"$set", bson.D{{"approved", false}}}})
 		if err != nil {
 			return RespondWithError(err, "unable to reject user", http.StatusInternalServerError, &tracingContext)
+		}
+	default:
+		return &ServerResponse{
+			StatusCode: http.StatusBadRequest,
+			Message:    "action type is not specified",
+			Err:        errors.New("action type is not specified"),
 		}
 	}
 
@@ -269,7 +285,7 @@ func (a *API) getUserTransactionHistory(w http.ResponseWriter, r *http.Request) 
 	id := r.URL.Query().Get("id")
 	query := bson.D{{"user_id", id}}
 
-	var response map[string]interface{}
+	response := make(map[string]interface{})
 	transfers, err := a.Deps.DAL.TransactionDAL.FetchTransfers(context.TODO(), query)
 	if err != nil {
 		return RespondWithError(err, "unable to fetch transfers", http.StatusInternalServerError, &tracingContext)
@@ -287,10 +303,23 @@ func (a *API) getUserTransactionHistory(w http.ResponseWriter, r *http.Request) 
 		return RespondWithError(err, "unable to fetch exchanges", http.StatusInternalServerError, &tracingContext)
 	}
 
+	if len(*transfers) == 0 {
+		transfers = &[]model.Transfer{}
+	}
+	if len(*withdraws) == 0 {
+		withdraws = &[]model.Withdrawal{}
+	}
+	if len(*deposits) == 0 {
+		deposits = &[]model.Deposit{}
+	}
+	if len(*exchanges) == 0 {
+		exchanges = &[]model.Exchange{}
+	}
+
 	response[types.TRANSFER] = transfers
 	response[types.WITHDRAW] = withdraws
-	response[types.DEPOSIT] = deposits
-	response[types.EXCHANGE] = exchanges
+	response[types.DEPOSIT] = *deposits
+	response[types.EXCHANGE] = *exchanges
 
 	return &ServerResponse{
 		Payload: response,
@@ -345,6 +374,7 @@ func (a *API) adminCreateAgent(w http.ResponseWriter, r *http.Request) *ServerRe
 		}
 	}
 
+	agent.ID = cuid.New()
 	err = a.Deps.DAL.AgentDAL.Add(context.TODO(), &agent)
 	if err != nil {
 		return RespondWithError(err, "Failed to create agent", http.StatusInternalServerError, &tracingContext)

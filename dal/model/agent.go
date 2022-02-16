@@ -1,8 +1,8 @@
 package model
 
 type Agent struct {
-	ID          string `bson:"id" json:"id"`
-	FullName    string `bson:"name" json:"name"`
+	ID          string `bson:"_id" json:"id"`
+	FullName    string `bson:"full_name" json:"full_name"`
 	Email       string `bson:"email" json:"email"`
 	Phone       string `bson:"phone" json:"phone"`
 	Wallet      Wallet `bson:"wallet" json:"wallet"` // A Merchant can only trade one currency hence just one wallet is needed

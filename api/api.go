@@ -94,7 +94,12 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			},
 		})
 	} else {
-		responseBytes, marshalErr = json.Marshal(response.Payload)
+
+		responseBytes, marshalErr = json.Marshal(map[string]interface{}{
+			"message":     response.Message,
+			"payload":     response.Payload,
+			"status_code": response.StatusCode,
+		})
 	}
 
 	if marshalErr != nil {
