@@ -238,6 +238,17 @@ func (a *API) getAllUsers(w http.ResponseWriter, r *http.Request) *ServerRespons
 		if err != nil {
 			return RespondWithError(err, "unable to fetch approved users", http.StatusInternalServerError, &tracingContext)
 		}
+	case types.SINGLE:
+		id := r.URL.Query().Get("id")
+		suser, err := a.Deps.DAL.UserDAL.FindOne(context.TODO(), bson.D{{"_id", id}})
+		if err != nil {
+			return RespondWithError(err, "unable to fetch single user", http.StatusInternalServerError, &tracingContext)
+		}
+		return &ServerResponse{
+			Message: "User fetched successfully",
+			Payload: suser,
+		}
+
 	default:
 		return &ServerResponse{
 			Message:    "Specified type is not supported",
@@ -411,6 +422,16 @@ func (a *API) getAllAgents(w http.ResponseWriter, r *http.Request) *ServerRespon
 		agent, err = a.Deps.DAL.AgentDAL.FindAll(context.TODO(), bson.D{{"approved", true}})
 		if err != nil {
 			return RespondWithError(err, "unable to fetch approved users", http.StatusInternalServerError, &tracingContext)
+		}
+	case types.SINGLE:
+		id := r.URL.Query().Get("id")
+		sagent, err := a.Deps.DAL.AgentDAL.FindOne(context.TODO(), bson.D{{"_id", id}})
+		if err != nil {
+			return RespondWithError(err, "unable to fetch single agent", http.StatusInternalServerError, &tracingContext)
+		}
+		return &ServerResponse{
+			Message: "agent fetched successfully",
+			Payload: sagent,
 		}
 	default:
 		return &ServerResponse{

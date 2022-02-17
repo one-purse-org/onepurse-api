@@ -20,6 +20,7 @@ import (
 
 type ICognitoService interface {
 	Login(l *model.LoginRequest) (*model.AuthResponse, error)
+	RefreshAccessToken(rt *model.RefreshTokenRequest) (*model.AuthResponse, error)
 	InvitedUserChangePassword(l *model.NewPasswordChallengeInput) (*model.AuthResponse, error)
 	SignUp(r *model.RegistrationRequest) (*model.SignupResponse, error)
 	ConfirmSignUp(v *model.VerificationRequest) (bool, error)
@@ -59,8 +60,8 @@ func (c CognitoService) generateCognitoSecretHash(username string) string {
 }
 
 func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error) {
-	params := &cognito.InitiateAuthInput{
-		AuthFlow: "USER_PASSWORD_AUTH",
+	params := cognito.InitiateAuthInput{
+		AuthFlow: types.AuthFlowTypeUserPasswordAuth,
 		AuthParameters: map[string]string{
 			"USERNAME":    l.Username,
 			"PASSWORD":    l.Password,
@@ -70,7 +71,7 @@ func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error
 	}
 
 	now := time.Now()
-	cognitoResponse, err := c.cognitoClient.InitiateAuth(context.TODO(), params)
+	cognitoResponse, err := c.cognitoClient.InitiateAuth(context.TODO(), &params)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +90,30 @@ func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error
 			ExpiresAt:    now.Add(time.Second * time.Duration(cognitoResponse.AuthenticationResult.ExpiresIn)),
 		}
 	}
+	return authResponse, nil
+}
+
+func (c CognitoService) RefreshAccessToken(rt *model.RefreshTokenRequest) (*model.AuthResponse, error) {
+	params := cognito.InitiateAuthInput{
+		AuthFlow: types.AuthFlowTypeRefreshTokenAuth,
+		ClientId: aws.String(c.config.CognitoAppClientID),
+		AuthParameters: map[string]string{
+			"SECRET_HASH":   c.generateCognitoSecretHash(rt.Email),
+			"REFRESH_TOKEN": rt.RefreshToken,
+		},
+	}
+
+	now := time.Now()
+	cognitoResponse, err := c.cognitoClient.InitiateAuth(context.TODO(), &params)
+	if err != nil {
+		return nil, err
+	}
+	authResponse := &model.AuthResponse{
+		AccessToken:  *cognitoResponse.AuthenticationResult.AccessToken,
+		RefreshToken: *cognitoResponse.AuthenticationResult.RefreshToken,
+		ExpiresAt:    now.Add(time.Second * time.Duration(cognitoResponse.AuthenticationResult.ExpiresIn)),
+	}
+
 	return authResponse, nil
 }
 
@@ -150,7 +175,6 @@ func (c CognitoService) SignUp(r *model.RegistrationRequest) (*model.SignupRespo
 
 func (c CognitoService) CreateUser(r *model.CreateUserRequest) (*model.CreateUserResponse, error) {
 	pass, err := password.Generate(10, 2, 3, false, false)
-	fmt.Println(pass)
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +184,7 @@ func (c CognitoService) CreateUser(r *model.CreateUserRequest) (*model.CreateUse
 		DesiredDeliveryMediums: []types.DeliveryMediumType{
 			types.DeliveryMediumTypeEmail,
 		},
+		TemporaryPassword:  aws.String(pass),
 		ForceAliasCreation: true, //TODO(JOSIAH): Remember to check that no user already use the specified username
 		UserAttributes: []types.AttributeType{
 			{

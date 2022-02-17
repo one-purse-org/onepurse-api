@@ -19,6 +19,7 @@ import (
 
 func (a *API) AuthRoutes(router *chi.Mux) http.Handler {
 	router.Method("POST", "/login", Handler(a.login))
+	router.Method("POST", "/refresh_token", Handler(a.refreshAccessToken))
 	router.Method("POST", "/signup", Handler(a.signUp))
 	router.Method("POST", "/confirm_signup", Handler(a.confirmSignUp))
 	router.Method("POST", "/reset_password", Handler(a.resetPassword))
@@ -245,6 +246,47 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) *ServerResponse {
 		authResponse.User = &user
 
 		return &ServerResponse{Payload: authResponse}
+	}
+}
+
+func (a *API) refreshAccessToken(w http.ResponseWriter, r *http.Request) *ServerResponse {
+	tracingContext := r.Context().Value(tracing.ContextKeyTracing).(tracing.Context)
+	var refresh model.RefreshTokenRequest
+	if err := decodeJSONBody(&tracingContext, r.Body, &refresh); err != nil {
+		return RespondWithError(err, "Failed to decode request body", http.StatusBadRequest, &tracingContext)
+	}
+	if refresh.RefreshToken == "" {
+		return RespondWithError(nil, "refresh_token is a required field", http.StatusBadRequest, &tracingContext)
+	}
+	if refresh.Email == "" {
+		return RespondWithError(nil, "email is a required fields", http.StatusBadRequest, &tracingContext)
+	}
+
+	authResponse, err := a.Deps.AWS.Cognito.RefreshAccessToken(&refresh)
+	if err != nil {
+		var ae smithy.APIError
+		if errors.As(err, &ae) {
+			switch ae.ErrorCode() {
+			case "InvalidParameterException":
+				return RespondWithError(err, "Invalid parameters provided", http.StatusBadRequest, &tracingContext)
+			case "NotAuthorizedException":
+				return RespondWithError(err, "Not authorized", http.StatusUnauthorized, &tracingContext)
+			case "PasswordResetRequiredException":
+				return RespondWithError(err, "Password reset required", http.StatusUnauthorized, &tracingContext)
+			case "UserNotConfirmedException":
+				return RespondWithError(err, "UserID is not confirmed", http.StatusUnauthorized, &tracingContext)
+			case "UserNotFoundException":
+				return RespondWithError(err, "UserID is not found", http.StatusNotFound, &tracingContext)
+			case "InvalidPasswordException":
+				return RespondWithError(err, "Invalid password provided", http.StatusBadRequest, &tracingContext)
+			default:
+				return RespondWithError(err, "Could not complete request", http.StatusInternalServerError, &tracingContext)
+			}
+		}
+	}
+	return &ServerResponse{
+		Payload: authResponse,
+		Message: "access token generated successfully",
 	}
 }
 

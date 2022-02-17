@@ -85,6 +85,11 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type RefreshTokenRequest struct {
+	Email        string `json:"email"`
+	RefreshToken string `json:"refresh_token"`
+}
+
 type AuthResponse struct {
 	ChallengeName string        `json:"challenge_name"`
 	User          *UserAuthResp `json:"user"`
