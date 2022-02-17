@@ -94,7 +94,7 @@ func (c CognitoService) Login(l *model.LoginRequest) (*model.AuthResponse, error
 }
 
 func (c CognitoService) RefreshAccessToken(rt *model.RefreshTokenRequest) (*model.AuthResponse, error) {
-	params := cognito.InitiateAuthInput{
+	params := &cognito.InitiateAuthInput{
 		AuthFlow: types.AuthFlowTypeRefreshTokenAuth,
 		ClientId: aws.String(c.config.CognitoAppClientID),
 		AuthParameters: map[string]string{
@@ -104,14 +104,23 @@ func (c CognitoService) RefreshAccessToken(rt *model.RefreshTokenRequest) (*mode
 	}
 
 	now := time.Now()
-	cognitoResponse, err := c.cognitoClient.InitiateAuth(context.TODO(), &params)
+	cognitoResponse, err := c.cognitoClient.InitiateAuth(context.TODO(), params)
 	if err != nil {
 		return nil, err
 	}
-	authResponse := &model.AuthResponse{
-		AccessToken:  *cognitoResponse.AuthenticationResult.AccessToken,
-		RefreshToken: *cognitoResponse.AuthenticationResult.RefreshToken,
-		ExpiresAt:    now.Add(time.Second * time.Duration(cognitoResponse.AuthenticationResult.ExpiresIn)),
+	authResponse := &model.AuthResponse{}
+	if cognitoResponse.AuthenticationResult.RefreshToken == nil {
+		authResponse = &model.AuthResponse{
+			AccessToken:  *cognitoResponse.AuthenticationResult.AccessToken,
+			RefreshToken: rt.RefreshToken,
+			ExpiresAt:    now.Add(time.Second * time.Duration(cognitoResponse.AuthenticationResult.ExpiresIn)),
+		}
+	} else {
+		authResponse = &model.AuthResponse{
+			AccessToken:  *cognitoResponse.AuthenticationResult.AccessToken,
+			RefreshToken: *cognitoResponse.AuthenticationResult.RefreshToken,
+			ExpiresAt:    now.Add(time.Second * time.Duration(cognitoResponse.AuthenticationResult.ExpiresIn)),
+		}
 	}
 
 	return authResponse, nil
